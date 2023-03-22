@@ -1,4 +1,3 @@
-import csv
 import sys
 
 dataIn = sys.argv[1]
