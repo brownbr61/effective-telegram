@@ -55,8 +55,8 @@ flash: $(BUILD_DIR)/$(TARGET).bin
 
 test: src/Sensor/test/filter_test.c
 	mkdir -p test
-	gcc src/Sensor/test/filter_test.c -o test/filter_test.c
-	test/filter_test.c
+	gcc src/Sensor/test/filter_test.c -o test/filter_test.o
+	test/filter_test.o
 
 clean:
 	rm -rf build
