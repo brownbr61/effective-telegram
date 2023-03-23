@@ -17,5 +17,9 @@ void initLEDs(struct LEDs* this) {
   RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
   GPIOC->MODER &= ~(0xFF000);
   GPIOC->MODER |= 0x55000;
+  this->red = 0;
+  this->orange = 0;
+  this->green = 0;
+  this->blue = 0;
   this->set = &setLEDs;
 }

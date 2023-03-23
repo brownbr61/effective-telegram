@@ -18,21 +18,22 @@ int main(void)
   struct LEDs leds;
   struct SensorData ledSensor;
 
+
   initLEDs(&leds);
-  initUart(&uart);
-  initSensorData(&ledSensor);
-
-
   leds.red = 1;
-  leds.blue = 1;
-  leds.green = 0;
-  leds.orange = 1;
+  leds.set(&leds);
 
+  initUart(&uart);
+  leds.orange = 1;
+  leds.set(&leds);
+
+  initSensorData(&ledSensor);
+  leds.green = 1;
   leds.set(&leds);
 
   while(1) {
-    uart.transmit(93);
-    leds.green = ledSensor.diverges(&ledSensor);
+    uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
+    leds.blue = ledSensor.diverges(&ledSensor);
     leds.set(&leds);
   }
 }

@@ -1,6 +1,6 @@
 
 struct UART_INT {
-  void (*transmit)(uint8_t);
+  void (*transmit)(uint16_t);
 };
 
 void transmitValue(uint8_t val) {
@@ -11,6 +11,11 @@ void transmitValue(uint8_t val) {
       wait = 0;
   // Write to tx reg
   USART3->TDR = val;
+}
+
+void transmit2bytes(uint16_t val) {
+  transmitValue(val >> 8);
+  transmitValue(val);
 }
 
 void initUart(struct UART_INT* this) {
@@ -48,5 +53,5 @@ void initUart(struct UART_INT* this) {
   // Enable USART3 interrupt on NVIC
   NVIC_EnableIRQ(USART3_4_IRQn);
   NVIC_SetPriority(USART3_4_IRQn, 1);
-  this->transmit = &transmitValue;
+  this->transmit = &transmit2bytes;
 }
