@@ -24,13 +24,13 @@ void initSensor(struct Sensor* this, uint32_t pinNum) {
   if ((ADC1->CR & ADC_CR_ADEN) != 0)
     ADC1->CR |= ADC_CR_ADDIS;
   while ((ADC1->CR & ADC_CR_ADEN) != 0) 
-    for (volatile uint64_t i = 0; i < 24000000; i++) {}
+    for (volatile uint64_t i = 0; i < 24000; i++) {}
 
   ADC1->CFGR1 &= ~ADC_CFGR1_DMAEN;
   ADC1->CR |= ADC_CR_ADCAL;
 
   while ((ADC1->CR & ADC_CR_ADCAL) != 0)
-    for (volatile uint64_t i = 0; i < 24000000; i++) {}
+    for (volatile uint64_t i = 0; i < 24000; i++) {}
 
   ADC1->CHSELR &= ~(analogPin);
 
