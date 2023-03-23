@@ -2,10 +2,16 @@
 #define MAIN_H
 
 #include <stdint.h>
+#include <stdbool.h>
+
+const uint32_t SystemCoreClock = 48000000;
+
 #include "stm32f072xb.h"
 #include "Sensor/Sensor.c"
 #include "Sensor/Filter.c"
 #include "Sensor/SensorData.c"
+#include "output/leds.c"
+#include "output/uart.c"
 
 
 #define REDLED (6)
