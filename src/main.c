@@ -18,7 +18,6 @@ int main(void)
   struct LEDs leds;
   struct SensorData ledSensor;
 
-
   initLEDs(&leds);
   leds.red = 1;
   leds.set(&leds);
@@ -30,6 +29,8 @@ int main(void)
   initSensorData(&ledSensor);
   leds.green = 1;
   leds.set(&leds);
+
+  // todo: init motors and drivers
 
   while(1) {
     uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
