@@ -17,12 +17,12 @@ void initDatOut(char* str,char* testName, int len) {
 
 bool basicBitchTest(FILE* fptr) {
   struct Filter basicBitchFilter;
-  initFilter(&basicBitchFilter, 7, geometric);
+  initFilter(&basicBitchFilter, 7, geometric,0);
   bool failure = 0;
   for (int i = 0; i < 256; i++) {
     fprintf(fptr,"%lu\n",basicBitchFilter.fOut);
     if(basicBitchOut[i] != basicBitchFilter.filter(&basicBitchFilter,basicBitchIn[i])) {
-      printf("%u: %u %lu\n",i, basicBitchOut[i], basicBitchFilter.fOut);
+      // printf("%u: %u %lu\n",i, basicBitchOut[i], basicBitchFilter.fOut);
       failure = 1;
     }
   }
@@ -32,7 +32,7 @@ bool basicBitchTest(FILE* fptr) {
 bool led_off_test(FILE* fptr) {
   // init & define filter
   struct Filter led_off_filter;
-  initFilter(&led_off_filter, 8, geometric);
+  initFilter(&led_off_filter, 8, geometric,0);
   uint16_t *filterIn = led_off_in;
   uint64_t *filterOut = led_off_out;
   uint64_t arrayLength = 70669;
@@ -50,7 +50,36 @@ bool led_off_test(FILE* fptr) {
     
     // report error on command line
     if(led_off_out[i] != led_off_filter.fOut) {
-      printf("%lu: %lu %lu\n",i, filterOut[i], led_off_filter.fOut);
+      // printf("%lu: %lu %lu\n",i, filterOut[i], led_off_filter.fOut);
+      failure = 1;
+    }
+  }
+
+  return failure;
+}
+
+bool whisker_test(FILE* fptr) {
+  // init & define filter
+  struct Filter whisker_test_filter;
+  initFilter(&whisker_test_filter, 8, &geometric,0);
+  uint16_t *filterIn = whisker_silver_ink;
+  uint16_t *filterOut = whisker_silver_ink;
+  uint64_t arrayLength = 454755;
+
+  //set return value
+  bool failure = 0;
+
+  // do test
+  for (uint64_t i = 0; i < arrayLength /* size of array*/; i++) {
+    // do filter
+    whisker_test_filter.filter(&whisker_test_filter,filterIn[i]);
+
+    // print filter in, output to *.csv
+    fprintf(fptr,"%u, %lu\n",filterIn[i],whisker_test_filter.fOut);
+    
+    // report error on command line
+    if(led_off_out[i]*256 != whisker_test_filter.fOut) {
+      printf("%lu: %lu %lu\n",i, filterOut[i], whisker_test_filter.fOut);
       failure = 1;
     }
   }
@@ -78,6 +107,8 @@ int main() {
 
   failCount += Test(&basicBitchTest, "filter_test.c.basicBitchTest");
   failCount += Test(&led_off_test, "filter_test.c.led_off_test");
+  failCount += Test(&whisker_test, "filter_test.c.whisker_silver_ink");
+
 
   printf("%u failures\n\n",failCount);
   return failCount;

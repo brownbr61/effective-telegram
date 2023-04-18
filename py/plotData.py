@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+import sys
 
 
-def viewcsv(filename):
+def plotData(filename):
   print(" ")
 
   with open(filename,'r') as fp:
@@ -19,8 +20,13 @@ def viewcsv(filename):
   print(y)
   # plt.plot(x)
   plt.plot(y)
+  plt.plot(geometricFilter(y,8))
   plt.show()
+
+def geometricFilter(data, bitShift):
+  for i in range (1,len(data)):
+    data[i] = (data[i-1] * (2**bitShift-1) + data[i])/(2**bitShift)
+  return data
   
 
-# viewcsv("data/out/filter_test.c.led_off_test.csv")
-viewcsv("data/out/filter_test.c.whisker_silver_ink.csv")
+plotData(sys.argv[1])
