@@ -19,8 +19,9 @@ def plotData(filename):
   print(x)
   print(y)
   # plt.plot(x)
+  y = y/256;
   plt.plot(y)
-  plt.plot(geometricFilter(y,8))
+  # plt.plot(geometricFilter(y,8))
   plt.show()
 
 def geometricFilter(data, bitShift):

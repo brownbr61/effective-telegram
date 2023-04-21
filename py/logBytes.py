@@ -30,10 +30,13 @@ if __name__ == '__main__':
     else:
         print("Could not interface with Disco... shutting down \n")
         f.write("Could not successfully open serial communication with port " + pn + "at rate " + br)
-
+    dt = 0;
     while ((time.time() - startTime) < float(sys.argv[2])):
         # f.write('{}, {}, {}\n'.format(time.time() - startTime,int.from_bytes(ser.read()+ser.read(),"big",signed=False),int.from_bytes(ser.read()+ser.read(),"big",signed=False)))
-        f.write('{}, {}\n'.format(time.time() - startTime,int.from_bytes(ser.read(),"big",signed=False)))
+        if(int(time.time() - startTime) > dt):
+            dt = int(time.time()-startTime)
+            print("{} seconds elapsed".format(dt))
+        f.write('{}, {}\n'.format(time.time() - startTime,int.from_bytes(ser.read()+ser.read(),"big",signed=False)))
     
     f.close()
     ser.close()

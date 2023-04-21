@@ -10,6 +10,6 @@ void initFilter(struct Filter* this,
                 uint64_t (*filterFunction)(struct Filter*, uint16_t), 
                 uint16_t dIn) {
   this->shft = shift;
-  this->fOut = 255 << shift;
+  this->fOut = 193 << shift;
   this->filter = filterFunction;
 }

@@ -14,7 +14,7 @@ void transmitValue(uint8_t val) {
 }
 
 void transmit2bytes(uint16_t val) {
-  // transmitValue((uint8_t)(val >> 8));
+  transmitValue((uint8_t)(val >> 8));
   transmitValue((uint8_t)val);
 }
 
