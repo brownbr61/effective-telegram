@@ -38,6 +38,9 @@ struct MotorPinout {
     int enc_pins[4];            // Used for encoder A outputs from H-Bridge
     int enc_alt_fxn_codes[4];   // The alternate function codes corresponding to the chosen encoder pins
     TIM_TypeDef *encTimer;      // Timer associated with encoder pins; used to calculate speed (must coordinate with enc array)
+    int *extLine;               // EXTI peripheral line tied to count interrupts
+    int sysCfgExtiBucket;       // The index which the chosen encoder pins correspond to in the SYSCFG_EXTICR buckets (values 0-3) [i.e. 0: 0-3, 1: 4-7, etc]
+    uint16_t exti_codes[4];     // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
 };
 
 void assignPins(struct MotorPinout *mp);
