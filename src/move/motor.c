@@ -31,6 +31,9 @@ void assignPins(struct MotorPinout *mp) {
     mp->encGpio = GPIOA;
     mp->pwmTimer = TIM3;
     mp->encTimer = TIM1;
+    mp->extLine = EXTI4_15_IRQn;
+    mp->sysCfgExtiBucket = 2;
+    mp->exti_codes = {SYSCFG_EXTICR3_EXTI8_PA, SYSCFG_EXTICR3_EXTI9_PA, SYSCFG_EXTICR3_EXTI10_PA, SYSCFG_EXTICR3_EXTI11_PA};
 }
 
 // Sets up the PWM and direction signals to drive the H-Bridge
@@ -114,64 +117,58 @@ void fillDirPins(int *allPins, struct MotorPinout *mp) {
     allPins[7] = mp->mtr_D_dir_pins[1];
 }
 
-void initEncodersV2(struct MotorPinout *mp) {
-
-
-    // todo: figure out how timer 1 and diff channels route to individual registers
-
-    // todo: what mode does timer need to be in? capture and compare? def not encoder input
-
-    // todo: what to set ARR values
-
-    // todo:
-}
-
-void getEncoderCounts() {
-
-}
-
-// Sets up encoder interface to read motor speed
+/* Sets up four GPIO pins for inputs and enable interrupts on rising and falling edge of encoder wave.
+ * Sets up timer for speed calculation and PI updates. */
 void initEncoders(struct MotorPinout *mp) {
-    // todo: port this to agnostic 4 pins
+    const int NUM_PINS = 4;
 
-    // Set up encoder input pins (TIMER 1 CH1-4)
-    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // todo: this is not pin agnostic
-    mp->encGpio->MODER &= ~(GPIO_MODER_MODER8_0 | GPIO_MODER_MODER9_0 | GPIO_MODER_MODER10_0 | GPIO_MODER_MODER11_0);
-    mp->encGpio->MODER |= (GPIO_MODER_MODER8_1 | GPIO_MODER_MODER9_1 | GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1);
+    // Enable EXTI in NVIC
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // todo: make agnostic
 
-    // Set selected pins to correct alternate functions (AF0-AF6)
+    // Enable interrupts
+    NVIC_EnableIRQ(mp->extLine);
+
+    // Set interrupt priority
+    NVIC_SetPriority(mp->extLine, 2);
+
     for (int i = 0; i < NUM_PINS; i++) {
-        int pinIdx = mp->enc_pins[i] * 4;     // 4 bits per pin for this register
-        int afVal = mp->enc_alt_fxn_codes[i];
+        int pinIdx = mp->enc_pins[i] * 2;            // 2 bits per pin for MODER, OSPEEDR, and PUPDR
 
-        // Pins 7+ in AFR[1]
-        if (pinIdx > 7) {
-            mp->pwmGpio->AFR[1] &= ~(0xF << pinIdx);    // Clear
-            mp->pwmGpio->AFR[1] |= (afVal << pinIdx);   // Assign
-            // Pins 0-6 in AFR[0]
-        } else {
-            mp->pwmGpio->AFR[0] &= ~(0xF << pinIdx);    // Clear
-            mp->pwmGpio->AFR[0] |= (afVal << pinIdx);   // Assign
-        }
+        // Set GPIO pins to input mode
+        mp->encGpio->MODER &= ~(11 << pinIdx); 		// Clear to input mode
+
+        // Set input speed to low (todo: read more about this, does it need to change?)
+        mp->encGpio->OSPEEDR &= ~(11 << pinIdx);    // Clear to low speed mode
+
+        // Enable pull-down resistor (todo: do we need to do this?)
+        mp->encGpio->PUPDR &= ~(11 << pinIdx);      // Clear
+        mp->encGpio->PUPDR |= (10 << pinIdx);       // Set to pull-down
     }
 
-    // Set up encoder interface (TIM3 encoder input mode)
-    // todo: can we use the same input mode for rotary encoder instead of quadrature encoder
-    RCC->APB2ENR |= RCC_APB2ENR_TIM1EN; // todo: this is not pin agnostic
-    mp->encTimer->CCMR1 = 0;
-    mp->encTimer->CCER = 0;
-    mp->encTimer->SMCR = 0;
-    mp->encTimer->CR1 = 0;
+    for (int i = 0; i < NUM_PINS; i++) {
+        int pinIdx = mp->enc_pins[i];        // 1 bit per pin for IDR, RTSR, FTSR
 
-    // todo: didn't change the CNT/ARR values here...
-    mp->encTimer->CCMR1 |= (TIM_CCMR1_CC1S_0 | TIM_CCMR1_CC2S_0);   // TI1FP1 and TI2FP2 signals connected to CH1 and CH2
-    mp->encTimer->SMCR |= (TIM_SMCR_SMS_1 | TIM_SMCR_SMS_0);        // Capture encoder on both rising and falling edges
-    mp->encTimer->ARR = 0xFFFF;                                     // Set ARR to top of timer (longest possible period)
-    mp->encTimer->CNT = 0x7FFF;                                     // Bias at midpoint to allow for negative rotation
-    // (Could also cast unsigned register to signed number to get negative numbers if it rotates backwards past zero
-    //  just another option, the mid-bias is a bit simpler to understand though.)
-    mp->encTimer->CR1 |= TIM_CR1_CEN;                               // Enable timer
+        EXTI->IDR &= ~(1 << pinIdx);         // Clear
+        EXTI->IDR |= (1 << pinIdx);          // Turn on interrupts
 
+        EXTI->RTSR &= ~(1 << pinIdx);       // Clear
+        EXTI->RTSR |= (1 << pinIdx);        // Turn on rising trigger
+
+        EXTI->FTSR &= ~(1 << pinIdx);       // Clear
+        EXTI->FTSR |= (1 << pinIdx);        // Turn on falling trigger
+    }
+
+    // Enable SYSCFG peripheral (this is on APB2 bus)
+    RCC->APB2RSTR |= RCC_APB2RSTR_SYSCFGRST;
+
+    // Configure the multiplexer to route PA8-11 to EXTI2
+    int bucketIdx = mp->sysCfgExtiBucket;
+    for (int i = 0; i < NUM_PINS; i++) {
+        uint16_t extiCode = mp->exti_codes[i];
+        SYSCFG->EXTICR[bucketIdx] |= extiCode;
+    }
+
+    // todo: set up timer
     // Configure a second timer (TIM6) to fire an ISR on update event
     // Used to periodically check and update speed variable
     // todo: can we use the same timer to do this? should be able to
@@ -202,6 +199,15 @@ void TIM6_DAC_IRQHandler(void) {
     PI_update();
 
     TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
+}
+
+// todo: what is the name for this? look in startup_stm32f072xb.s
+void EXTI4_15_IRQHandler(void)
+{
+    // todo: is this line specific
+
+    // Clear flag for input line 3 in EXTI pending register
+    EXTI->PR |= // todo: what bit here;
 }
 
 void initADC() {
