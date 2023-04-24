@@ -6,12 +6,16 @@
 
 // Sets up the entire motor drive system
 void initMotor(void) {
+    struct Motor m;
+
     struct MotorPinout mp;
-    assignPins(*mp);
+    assignPins(mp);
     initPWMs(*mp);
     initEncoders(*mp);
     initADC();
-}
+
+    encoderCounts = {0, 0, 0, 0};
+};
 
 // todo: how to determine direction
 
@@ -24,14 +28,14 @@ void assignPins(struct MotorPinout *mp) {
     mp->mtr_B_dir_pins = {6, 7};             // PB6, PB7
     mp->mtr_C_dir_pins = {8, 9};             // PB8, PB9
     mp->mtr_D_dir_pins = {10, 11};           // PB10, PB11
-    pm->enc_pins = {8, 9, 10, 11};           // PA8, PA9, PA10, PA11 w/ TIM1
+    pm->enc_pins = {8, 9, 10, 11};           // PA8, PA9, PA10, PA11
     mp->pwm_alt_fxn_codes = {0x2, 0x2, 0x2, 0x2}; // AF2/0010, AF2/0010, AF2/0010, AF2/0010
     mp->pwmGpio = GPIOC;
     mp->dirGpio = GPIOB;
     mp->encGpio = GPIOA;
     mp->pwmTimer = TIM3;
     mp->encTimer = TIM1;
-    mp->extLine = EXTI4_15_IRQn;
+    mp->extLine = EXTI4_15_IRQn;            // NOTE: IF THIS CHANGES, NEED TO MANUALLY UPDATE INTERRUPT HANDLER
     mp->sysCfgExtiBucket = 2;
     mp->exti_codes = {SYSCFG_EXTICR3_EXTI8_PA, SYSCFG_EXTICR3_EXTI9_PA, SYSCFG_EXTICR3_EXTI10_PA, SYSCFG_EXTICR3_EXTI11_PA};
 }
@@ -84,7 +88,7 @@ void initPWMs(struct MotorPinout *mp) {
     }
 
     // Set up PWM timer
-    RCC->APB1ENR |= APB;    // todo: left off here
+    RCC->APB1ENR |= APB; // todo: FIX
     mp->pwmTimer->CR1 = 0;
     mp->pwmTimer->CCMR1 = 0;                       // (prevents having to manually clear bits)
     mp->pwmTimer->CCER = 0;
@@ -127,9 +131,10 @@ void initEncoders(struct MotorPinout *mp) {
 
     // Enable interrupts
     NVIC_EnableIRQ(mp->extLine);
+    // todo: is this sufficient for enabling EXTI interrupts or do I need to mask interrupts specifically on the EXTI->IMR register?
 
     // Set interrupt priority
-    NVIC_SetPriority(mp->extLine, 2);
+    NVIC_SetPriority(mp->extLine, 3);
 
     for (int i = 0; i < NUM_PINS; i++) {
         int pinIdx = mp->enc_pins[i] * 2;            // 2 bits per pin for MODER, OSPEEDR, and PUPDR
@@ -168,13 +173,12 @@ void initEncoders(struct MotorPinout *mp) {
         SYSCFG->EXTICR[bucketIdx] |= extiCode;
     }
 
-    // todo: set up timer
     // Configure a second timer (TIM6) to fire an ISR on update event
     // Used to periodically check and update speed variable
-    // todo: can we use the same timer to do this? should be able to
     RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
 
     // Select PSC and ARR values that give an appropriate interrupt rate
+    // todo: calculate rate here
     TIM6->PSC = 11;
     TIM6->ARR = 30000;
 
@@ -182,7 +186,7 @@ void initEncoders(struct MotorPinout *mp) {
     TIM6->CR1 |= TIM_CR1_CEN;               // Enable Timer
 
     NVIC_EnableIRQ(TIM6_DAC_IRQn);          // Enable interrupt in NVIC
-    NVIC_SetPriority(TIM6_DAC_IRQn,2);
+    NVIC_SetPriority(TIM6_DAC_IRQn, 2);
 }
 
 // Encoder interrupt to calculate motor speed, also manages PI controller
@@ -191,9 +195,12 @@ void TIM6_DAC_IRQHandler(void) {
      * Note the motor speed is signed! Motor can be run in reverse.
      * Speed is measured by how far the counter moved from center point
      */
-    // todo: this is not pin/timer agnostic - can I pass arg here?
+    // todo: how will this change for four motors instead of one
     motor_speed = (TIM1->CNT - 0x7FFF);
     TIM1->CNT = 0x7FFF; // Reset back to center point
+
+    // todo: if we haven't had any ticks come in since our last interrupt, can we assume we're at a stop?
+    // todo: then we can decide to set direction?
 
     // Call the PI update function
     PI_update();
@@ -201,32 +208,34 @@ void TIM6_DAC_IRQHandler(void) {
     TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
 }
 
-// todo: what is the name for this? look in startup_stm32f072xb.s
+/* The handler fired for each tick interrupt.
+ * Increments the appropriate count variable according to which encoder fired the event. */
 void EXTI4_15_IRQHandler(void)
-{
-    // todo: is this line specific
+    // NOTE: there is no way to make this pin agnostic, have to manually update consts below if pins are changed
+    const int ENC_PINS[] = {8, 9, 10, 11};
+    const int ENC_INT_LINE = EXTI4_15_IRQn;
+    const int COUNT_IDX_OFFSET = 7;
+    const int NUM_PINS = 4;
 
-    // Clear flag for input line 3 in EXTI pending register
-    EXTI->PR |= // todo: what bit here;
-}
+    // Mask all other tick interrupts so we don't double count
+    // this assumes the 4_15 handler will resume before accepting another interrupt
+    NVIC_DisableIRQ(ENC_INT_LINE);
 
-void initADC() {
-    // todo: need to port this to pin agnostic
-    // Configure PA1 for ADC input (used for current monitoring)
-    GPIOA->MODER |= (GPIO_MODER_MODER1_0 | GPIO_MODER_MODER1_1);
+    // Check which bit is pending (represents which encoder fired tick interrupt)
+    for (int i = 0; i < NUM_PINS; i++) {
+        int pinIdx = ENC_PINS[i];       // One bit per pin for PR register
 
-    // Configure ADC to 8-bit continuous-run mode, (asynchronous clock mode)
-    RCC->APB2ENR |= RCC_APB2ENR_ADCEN;
+        uint16_t pinIsPending = EXTI->PR & (1 << pinIdx);
+        if (pinIsPending) {
+            // Get corresponding count index and increment
+            int countIdx = pinIdx - COUNT_IDX_OFFSET;
+            encoderCounts[countIdx] += 1;
 
-    ADC1->CFGR1 = 0;                        // Default resolution is 12-bit (RES[1:0] = 00 --> 12-bit)
-    ADC1->CFGR1 |= ADC_CFGR1_CONT;          // Set to continuous mode
-    ADC1->CHSELR |= ADC_CHSELR_CHSEL1;      // Enable channel 1
+            // Clear pending interrupt flag
+            EXTI->PR &= ~(1 << pinIdx);
+        }
+    }
 
-    ADC1->CR = 0;
-    ADC1->CR |= ADC_CR_ADCAL;               // Perform self calibration
-    while(ADC1->CR & ADC_CR_ADCAL);         // Delay until calibration is complete
-
-    ADC1->CR |= ADC_CR_ADEN;                // Enable ADC
-    while(!(ADC1->ISR & ADC_ISR_ADRDY));    // Wait until ADC ready
-    ADC1->CR |= ADC_CR_ADSTART;             // Signal conversion start
+    // Enable tick interrupts again
+    NVIC_EnableIRQ(ENC_INT_LINE);
 }
