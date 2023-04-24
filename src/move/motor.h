@@ -4,12 +4,14 @@
 
 #ifndef EFFECTIVE_TELEGRAM_MOTOR_H
 #define EFFECTIVE_TELEGRAM_MOTOR_H
+
+// Todo: this needs to be changed!
+#define CONV_MOTOR_SPEED_TO_TARGET_RPM 2
+
 struct Motor {
     uint8_t forward;            // Direction of movement (0 = reverse; >0 = forward)
-    uint8_t duty_cycle;         // Output PWM duty cycle
     int16_t target_rpm;         // Desired speed target
     uint16_t motor_speed;       // Measured motor speed
-    int8_t adc_value;           // ADC measured motor current
     int16_t error;              // Speed error signal
     int16_t error_integral;     // Integrated error signal
     uint8_t Kp;                     // Proportional gain
@@ -62,7 +64,7 @@ void setDutyCycle(uint8_t duty);
 // PI control code is called within a timer interrupt
 void updatePI(void);
 
-//
-void initADC(struct MotorPinout *mp);
+// todo: add directions here
+
 
 #endif //EFFECTIVE_TELEGRAM_MOTOR_H

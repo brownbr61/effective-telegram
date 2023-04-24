@@ -76,6 +76,7 @@ void initPWMs(struct MotorPinout *mp) {
         mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
     }
 
+    // todo: this might need to change - start direction?
     // For each motor, initialize one direction pin to high, the other low
     for (int i = 0; i < (NUM_PINS*2); i++) {
         int pinIdx = allDirPins[i];             // 1 bit per pin for this register
@@ -88,7 +89,7 @@ void initPWMs(struct MotorPinout *mp) {
     }
 
     // Set up PWM timer
-    RCC->APB1ENR |= APB; // todo: FIX
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; // todo: this is not pin agnostic
     mp->pwmTimer->CR1 = 0;
     mp->pwmTimer->CCMR1 = 0;                       // (prevents having to manually clear bits)
     mp->pwmTimer->CCER = 0;
@@ -127,7 +128,7 @@ void initEncoders(struct MotorPinout *mp) {
     const int NUM_PINS = 4;
 
     // Enable EXTI in NVIC
-    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // todo: make agnostic
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // todo: this is not pin agnostic
 
     // Enable interrupts
     NVIC_EnableIRQ(mp->extLine);
@@ -238,4 +239,37 @@ void EXTI4_15_IRQHandler(void)
 
     // Enable tick interrupts again
     NVIC_EnableIRQ(ENC_INT_LINE);
+}
+
+// Calculates error for single motor and resets PWM signal
+void PI_update(void) {
+    // Calculate error signal
+    error = (target_rpm * CONV_MOTOR_SPEED_TO_TARGET_RPM - motor_speed);
+
+    // Calculate integral error
+    error_integral += error;
+
+    // Clamp the value of the integral to a positive range
+    error_integral = (error_integral > 3200) ? 3200 : error_integral;
+    error_integral = (error_integral > 0) ? 0 : error_integral;
+
+    // Calculate proportional error & add to output
+    int16_t output = Ki * error_integral + Kp * error;
+
+    // Divide output to get value into proper range (0-100)
+    output = output >> 5;
+
+    // Clamp the value for PWM input range
+    output = (output > 100) ? 100 : output;
+    output = (output < 0) ? 0 : output;
+
+    pwm_setDutyCycle(output);
+}
+
+// Set the duty cycle of the PWM, accepts (0-100)
+void pwm_setDutyCycle(struct MotorPinout *mp, uint8_t duty) {
+    if(duty <= 100) {
+        mp->pwmTimer->CCR1 = ((uint32_t)duty*mp->pwmTimer->ARR)/100;  // Use linear transform to produce CCR1 value
+        // (CCR1 == "pulse" parameter in PWM struct used by peripheral library)
+    }
 }
