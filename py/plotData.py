@@ -19,7 +19,7 @@ def plotData(filename):
   print(x)
   print(y)
   # plt.plot(x)
-  y = y/256;
+  y = y/int(sys.argv[2]);
   plt.plot(y)
   # plt.plot(geometricFilter(y,8))
   plt.show()
