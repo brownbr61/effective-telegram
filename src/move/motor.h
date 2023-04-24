@@ -5,14 +5,15 @@
 #ifndef EFFECTIVE_TELEGRAM_MOTOR_H
 #define EFFECTIVE_TELEGRAM_MOTOR_H
 struct Motor {
+    uint8_t forward;            // Direction of movement (0 = reverse; >0 = forward)
     uint8_t duty_cycle;         // Output PWM duty cycle
     int16_t target_rpm;         // Desired speed target
     uint16_t motor_speed;       // Measured motor speed
     int8_t adc_value;           // ADC measured motor current
     int16_t error;              // Speed error signal
     int16_t error_integral;     // Integrated error signal
-    uint8_t Kp;                 // Proportional gain
-    uint8_t Ki;                 // Integral gain
+    uint8_t Kp;                     // Proportional gain
+    uint8_t Ki;                     // Integral gain
     uint16_t (*turn)(struct Motor*);
 };
 
@@ -43,6 +44,8 @@ struct MotorPinout {
     uint16_t exti_codes[4];     // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
 };
 
+uint64_t encoderCounts[4];
+
 void assignPins(struct MotorPinout *mp);
 
 void initMotor(struct Motor*, uint32_t);
@@ -50,6 +53,7 @@ void initMotor(struct Motor*, uint32_t);
 // Sets up all PWM pins and direction signals to drive the H-Bridges
 void initPWMs(struct MotorPinout *mp);
 
+// Sets up GPIO inputs for encoder signals + sets up timer for speed check interrupts
 void initEncoders(struct MotorPinout *ep);
 
 // Set the duty cycle of the PWM, accepts (0-100)
@@ -58,6 +62,7 @@ void setDutyCycle(uint8_t duty);
 // PI control code is called within a timer interrupt
 void updatePI(void);
 
+//
 void initADC(struct MotorPinout *mp);
 
 #endif //EFFECTIVE_TELEGRAM_MOTOR_H
