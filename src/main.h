@@ -12,6 +12,7 @@ const uint32_t SystemCoreClock = 48000000;
 #include "Sensor/SensorData.c"
 #include "output/leds.c"
 #include "output/uart.c"
+#include "motor/motor.c"
 
 
 #define REDLED (6)
@@ -44,6 +45,10 @@ void DELAY(int t)
 {
   uint32_t start = tick;
   while (tick - start < t);
+}
+
+void ERROR(char *err) {
+    // todo: implement UART?
 }
 
 #endif

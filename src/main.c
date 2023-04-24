@@ -30,7 +30,8 @@ int main(void)
   leds.green = 1;
   leds.set(&leds);
 
-  // todo: init motors and drivers
+  // todo: initialize motors
+  // todo: add move code to this class?
 
   while(1) {
     uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));

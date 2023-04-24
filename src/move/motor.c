@@ -5,19 +5,38 @@
 #include "motor.h"
 
 // Sets up the entire motor drive system
-void initMotor(void) {
-    struct Motor m;
-
+void initMotion(void) {
     struct MotorPinout mp;
-    assignPins(mp);
+    assignPins(*mp);
+
+    initMotors(*mp);
     initPWMs(*mp);
     initEncoders(*mp);
-    initADC();
 
     encoderCounts = {0, 0, 0, 0};
-};
+}
 
-// todo: how to determine direction
+/* Initializes all motors in the forward direction in a stopped state */
+void initMotors(struct MotorPinout *mp) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
+        struct Motor *motor = motors[i];
+        motor->direction = 1;
+        motor->target_rpm = 0;
+        motor->motor_speed = 0;
+        motor->error = 0;
+        motor->error_integral = 0;
+
+        motor->setCycle = &pwm_setDutyCycle;
+        motor->correctError = &updatePI;
+        motor->spin = &spinMotor;
+        motor->stop = &stopMotor;
+
+        motor->pwmGpio = mp->pwmGpio;
+        motor->pwm_in_pin = mp->pwm_in_pins[i];
+        motor->pwm_alt_fxn_code = mp->pwm_alt_fxn_codes[i];
+
+    }
+}
 
 /* Pin assignment for the PWM input and motor direction outputs.
  * Note: using a single timer for all four PWM input pins to keep motors at synched RPMs */
@@ -42,17 +61,16 @@ void assignPins(struct MotorPinout *mp) {
 
 // Sets up the PWM and direction signals to drive the H-Bridge
 void initPWMs(struct MotorPinout *mp) {
-    static const int NUM_PINS = 4;
 
     // Set all four pin choices to alt fxn mode
-    for (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = mp->pwm_in_pins[i] * 2;     // 2 bits per pin for this register
         mp->pwmGpio->MODER |= (1 << (pinIdx+1));
         mp->pwmGpio->MODER &= ~(1 << pinIdx);
     }
 
     // Set selected pins to correct alternate functions (AF0-AF6)
-    for (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = mp->pwm_in_pins[i] * 4;     // 4 bits per pin for this register
         int afVal = mp->pwm_alt_fxn_codes[i];
 
@@ -70,15 +88,15 @@ void initPWMs(struct MotorPinout *mp) {
     // Set up GPIO output pins for motor direction control
     int allDirPins[8];
     fillDirPins(allDirPins, mp);
-    for (int i = 0; i < (NUM_PINS*2); i++) {
+    for (int i = 0; i < (NUM_MOTORS*2); i++) {
         int pinIdx = allDirPins[i]*2;           // 2 bits per pin for this register
         mp->dirGpio->MODER &= ~(11 << pinIdx);  // Clear
         mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
     }
 
-    // todo: this might need to change - start direction?
+    // todo: does this set forward or backwards? Need to test
     // For each motor, initialize one direction pin to high, the other low
-    for (int i = 0; i < (NUM_PINS*2); i++) {
+    for (int i = 0; i < (NUM_MOTORS*2); i++) {
         int pinIdx = allDirPins[i];             // 1 bit per pin for this register
         // Set pins in even indices high, odd indices low
         if (i%2 == 0) {
@@ -100,7 +118,11 @@ void initPWMs(struct MotorPinout *mp) {
     mp->pwmTimer->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
     mp->pwmTimer->PSC = 1;                         // Run timer on 24Mhz
     mp->pwmTimer->ARR = 1200;                      // PWM at 20kHz
-    mp->pwmTimer->CCR1 = 0;                        // Start PWM at 0% duty cycle
+
+    mp->pwmTimer->CCR1 = 0;                        // Start PWMs at 0% duty cycle
+    mp->pwmTimer->CCR2 = 0;
+    mp->pwmTimer->CCR3 = 0;
+    mp->pwmTimer->CCR4 = 0;
 
     mp->pwmTimer->CR1 |= TIM_CR1_CEN;              // Enable timer
 }
@@ -125,8 +147,6 @@ void fillDirPins(int *allPins, struct MotorPinout *mp) {
 /* Sets up four GPIO pins for inputs and enable interrupts on rising and falling edge of encoder wave.
  * Sets up timer for speed calculation and PI updates. */
 void initEncoders(struct MotorPinout *mp) {
-    const int NUM_PINS = 4;
-
     // Enable EXTI in NVIC
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // todo: this is not pin agnostic
 
@@ -137,7 +157,7 @@ void initEncoders(struct MotorPinout *mp) {
     // Set interrupt priority
     NVIC_SetPriority(mp->extLine, 3);
 
-    for (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = mp->enc_pins[i] * 2;            // 2 bits per pin for MODER, OSPEEDR, and PUPDR
 
         // Set GPIO pins to input mode
@@ -151,7 +171,7 @@ void initEncoders(struct MotorPinout *mp) {
         mp->encGpio->PUPDR |= (10 << pinIdx);       // Set to pull-down
     }
 
-    for (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = mp->enc_pins[i];        // 1 bit per pin for IDR, RTSR, FTSR
 
         EXTI->IDR &= ~(1 << pinIdx);         // Clear
@@ -169,7 +189,7 @@ void initEncoders(struct MotorPinout *mp) {
 
     // Configure the multiplexer to route PA8-11 to EXTI2
     int bucketIdx = mp->sysCfgExtiBucket;
-    for (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
         uint16_t extiCode = mp->exti_codes[i];
         SYSCFG->EXTICR[bucketIdx] |= extiCode;
     }
@@ -196,15 +216,13 @@ void TIM6_DAC_IRQHandler(void) {
      * Note the motor speed is signed! Motor can be run in reverse.
      * Speed is measured by how far the counter moved from center point
      */
-    // todo: how will this change for four motors instead of one
-    motor_speed = (TIM1->CNT - 0x7FFF);
-    TIM1->CNT = 0x7FFF; // Reset back to center point
 
-    // todo: if we haven't had any ticks come in since our last interrupt, can we assume we're at a stop?
-    // todo: then we can decide to set direction?
-
-    // Call the PI update function
-    PI_update();
+    for (int i = 0; i < NUM_MOTORS; i++) {
+        struct Motor *motor = motors[i];
+        motor->motor_speed = encoderCounts[i];  // Assign count value to appropriate struct
+        encoderCounts[i] = 0;                   // Reset
+        motor.correctError();
+    }
 
     TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
 }
@@ -216,14 +234,13 @@ void EXTI4_15_IRQHandler(void)
     const int ENC_PINS[] = {8, 9, 10, 11};
     const int ENC_INT_LINE = EXTI4_15_IRQn;
     const int COUNT_IDX_OFFSET = 7;
-    const int NUM_PINS = 4;
 
     // Mask all other tick interrupts so we don't double count
     // this assumes the 4_15 handler will resume before accepting another interrupt
     NVIC_DisableIRQ(ENC_INT_LINE);
 
     // Check which bit is pending (represents which encoder fired tick interrupt)
-    for (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = ENC_PINS[i];       // One bit per pin for PR register
 
         uint16_t pinIsPending = EXTI->PR & (1 << pinIdx);
@@ -236,25 +253,25 @@ void EXTI4_15_IRQHandler(void)
             EXTI->PR &= ~(1 << pinIdx);
         }
     }
-
     // Enable tick interrupts again
     NVIC_EnableIRQ(ENC_INT_LINE);
 }
 
 // Calculates error for single motor and resets PWM signal
-void PI_update(void) {
+void PI_update(struct Motor *this) {
     // Calculate error signal
-    error = (target_rpm * CONV_MOTOR_SPEED_TO_TARGET_RPM - motor_speed);
+    this->error = (this->target_rpm * CONV_MOTOR_SPEED_TO_TARGET_RPM - this->motor_speed);
 
     // Calculate integral error
-    error_integral += error;
+    this->error_integral += this->error;
 
     // Clamp the value of the integral to a positive range
-    error_integral = (error_integral > 3200) ? 3200 : error_integral;
-    error_integral = (error_integral > 0) ? 0 : error_integral;
+    // todo: does this bound change?
+    this->error_integral = (this->error_integral > 3200) ? 3200 : this->error_integral;
+    this->error_integral = (this->error_integral > 0) ? 0 : this->error_integral;
 
     // Calculate proportional error & add to output
-    int16_t output = Ki * error_integral + Kp * error;
+    int16_t output = Ki * this->error_integral + Kp * this->error;
 
     // Divide output to get value into proper range (0-100)
     output = output >> 5;
@@ -263,13 +280,59 @@ void PI_update(void) {
     output = (output > 100) ? 100 : output;
     output = (output < 0) ? 0 : output;
 
-    pwm_setDutyCycle(output);
+    this->setCycle(output);
 }
 
 // Set the duty cycle of the PWM, accepts (0-100)
-void pwm_setDutyCycle(struct MotorPinout *mp, uint8_t duty) {
+void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
     if(duty <= 100) {
-        mp->pwmTimer->CCR1 = ((uint32_t)duty*mp->pwmTimer->ARR)/100;  // Use linear transform to produce CCR1 value
-        // (CCR1 == "pulse" parameter in PWM struct used by peripheral library)
+        uint32_t autoReload = this->pwmTimer->ARR;
+        uint8_t motorIdx = this->id;
+        switch (motorIdx) {
+            case 1:
+                this->pwmTimer->CCR1 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                break;
+            case 2:
+                this->pwmTimer->CCR2 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                break;
+            case 3:
+                this->pwmTimer->CCR3 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                break;
+            case 4:
+                this->pwmTimer->CCR4 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                break;
+            default:
+                ERROR("Incorrect motor index supplied to set PWM duty cycle \n\r");
+        }
+    } else {
+        ERROR("Invalid duty cycle value supplied to set PWM duty cycle \n\r");
     }
+}
+
+/* Sets the target RPM and direction for this motor */
+void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
+    if (targetRpm > 0) {
+        this->target_rpm = targetRpm;
+        uint8t pinIdxA = this->dir_pin_A;
+        uint8t pinIdxB = this->dir_pin_B;
+
+        // todo: test that forwards/back matches the pins we've selected here, may need to flip
+        if (dir > 0) {
+            // Pin A to high, pin B to low
+            this->dirGpio->ODR |= (1 << pinIdxA);
+            this->dirGpio->ODR &= ~(1 << pinIdxB);
+        } else if (dir < 0) {
+            this->dirGpio->ODR |= (1 << pinIdxB);
+            this->dirGpio->ODR &= ~(1 << pinIdxA);
+        }
+    } else {
+        ERROR("Cant spin at an RPM < 0");
+    }
+    // todo: what else do we need to get going here?
+}
+
+/* Stops the motor by setting the target RPM to zero. Does not affect direction. */
+void stopMotor(struct Motor *this) {
+    this->target_rpm = 0;
+    // todo: is setting target_rpm sufficient here?
 }
