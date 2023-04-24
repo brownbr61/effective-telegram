@@ -19,7 +19,13 @@ const uint32_t SystemCoreClock = 48000000;
 #define BLUELED (7)
 #define ORANGELED (8)
 #define GREENLED (9)
- 
+
+// Starting at top left (US driver's side front), motors go clockwise
+// 0 = front left
+// 1 = front right
+// 2 = rear right
+// 3 = rear left
+struct Motor motors[4];
 
 extern volatile uint32_t tick;
 
@@ -40,7 +46,6 @@ void HSI48_EN(void)
 
 }
 
-/*  */
 void DELAY(int t)
 {
   uint32_t start = tick;
@@ -48,7 +53,13 @@ void DELAY(int t)
 }
 
 void ERROR(char *err) {
-    // todo: implement UART?
+    // todo: add string transmit to UART class
 }
+
+void move(uint8_t direction);
+void moveForward(void);
+void moveRight(void);
+void moveBackward(void);
+void moveLeft(void);
 
 #endif

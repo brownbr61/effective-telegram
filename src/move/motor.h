@@ -35,10 +35,9 @@ struct Motor {
     uint8t dir_pin_A;
     uint8t dir_pin_B;
 
-    GPIO_TypeDef *encGpio;
+    // todo: do we need any other mp pointers linked in here?
 };
 
-struct Motor motors[4];
 uint64_t encoderCounts[4];
 
 /* A single object to assign/control our motor connections to the STM32 Discovery board.
