@@ -33,7 +33,8 @@ int main(void)
   leds.set(&leds);
   for (volatile int i = 0; i < 2400000; i++) {}
 
-  // todo: init motors and drivers
+  // todo: initialize motors
+  // todo: add move code to this class?
 
   uint16_t tmp;
   int i = 0;
