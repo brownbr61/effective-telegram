@@ -3,6 +3,8 @@ struct UART_INT {
   void (*transmit)(uint16_t);
 };
 
+// todo: add in transmitString for debugging purposes/ERROR fxn
+
 void transmitValue(uint8_t val) {
   // Wait until our tx reg is ready
   volatile int wait = 1;

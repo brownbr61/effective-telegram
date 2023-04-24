@@ -35,6 +35,25 @@ void initMotors(struct MotorPinout *mp) {
         motor->pwm_in_pin = mp->pwm_in_pins[i];
         motor->pwm_alt_fxn_code = mp->pwm_alt_fxn_codes[i];
 
+        motor->dirGpio = mp->dirGpio;
+        switch (i) {
+            case 0:
+                motor->dir_pin_A = mp->mtr_A_dir_pins[0];
+                motor->dir_pin_B = mp->mtr_A_dir_pins[1];
+                return;
+            case 1:
+                motor->dir_pin_A = mp->mtr_B_dir_pins[0];
+                motor->dir_pin_B = mp->mtr_B_dir_pins[1];
+                return;
+            case 2:
+                motor->dir_pin_A = mp->mtr_C_dir_pins[0];
+                motor->dir_pin_B = mp->mtr_C_dir_pins[1];
+                return;
+            case 1:
+                motor->dir_pin_A = mp->mtr_D_dir_pins[0];
+                motor->dir_pin_B = mp->mtr_D_dir_pins[1];
+                return;
+        }
     }
 }
 
