@@ -19,24 +19,29 @@ int main(void)
   struct SensorData ledSensor;
 
   initLEDs(&leds);
-  leds.red = 1;
-  leds.set(&leds);
 
   initUart(&uart);
-  leds.orange = 1;
-  leds.set(&leds);
 
   initSensorData(&ledSensor);
   leds.green = 1;
   leds.set(&leds);
+  DELAY(500);
+  leds.green = 0;
+  leds.set(&leds);
 
-  initMotion();
+  initMotion(&leds);
+  leds.blue = 1;
+  leds.set(&leds);
 
-  while(1) {
-    uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
-    leds.blue = ledSensor.diverges(&ledSensor);
-    leds.set(&leds);
-  }
+  moveForward();
+  DELAY(5000);
+  stop();
+
+//   while(1) {
+//     uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
+//     leds.blue = ledSensor.diverges(&ledSensor);
+//     leds.set(&leds);
+//   }
 }
 
 // Convenience methods
@@ -64,44 +69,44 @@ void moveLeft(void) {
 void move(uint8_t direction) {
     const int FORWARD = 1;
     const int REVERSE = -1;
-    const TARGET_RPM = 100; // todo: placeholder
+    const int TARGET_RPM = 100; // todo: placeholder
 
-    struct Motor *fl = motors[0];   // Front left
-    struct Motor *fr = motors[1];   // Front right
-    struct Motor *rr = motors[2];   // Rear right
-    struct Motor *rl = motors[3];   // Rear left
+    struct Motor *fl = &motors[0];   // Front left
+    struct Motor *fr = &motors[1];   // Front right
+    struct Motor *rr = &motors[2];   // Rear right
+    struct Motor *rl = &motors[3];   // Rear left
 
     switch (direction) {
         case 0: // Stop
-            fl->stopMotor(fr);
-            fr->stopMotor(fr);
-            rr->stopMotor(rr);
-            rl->stopMotor(rl);
+            fl->stop(fr);
+            fr->stop(fr);
+            rr->stop(rr);
+            rl->stop(rl);
             return;
         case 1: // Forward
-            fl->spinMotor(fl, TARGET_RPM, FORWARD);
-            fr->spinMotor(fr, TARGET_RPM, FORWARD);
-            rr->spinMotor(rr, TARGET_RPM, FORWARD);
-            rl->spinMotor(rl, TARGET_RPM, FORWARD);
+            fl->spin(fl, TARGET_RPM, FORWARD);
+            fr->spin(fr, TARGET_RPM, FORWARD);
+            rr->spin(rr, TARGET_RPM, FORWARD);
+            rl->spin(rl, TARGET_RPM, FORWARD);
             return;
         case 2: // Right
             // todo: NEED TO TEST, might need to swap w/ left
-            fl->spinMotor(fl, TARGET_RPM, REVERSE);
-            fr->spinMotor(fr, TARGET_RPM, FORWARD);
-            rr->spinMotor(rr, TARGET_RPM, REVERSE);
-            rl->spinMotor(rl, TARGET_RPM, FORWARD);
+            fl->spin(fl, TARGET_RPM, REVERSE);
+            fr->spin(fr, TARGET_RPM, FORWARD);
+            rr->spin(rr, TARGET_RPM, REVERSE);
+            rl->spin(rl, TARGET_RPM, FORWARD);
             return;
         case 3: // Backward
-            fl->spinMotor(fl, TARGET_RPM, REVERSE);
-            fr->spinMotor(fr, TARGET_RPM, REVERSE);
-            rr->spinMotor(rr, TARGET_RPM, REVERSE);
-            rl->spinMotor(rl, TARGET_RPM, REVERSE);
+            fl->spin(fl, TARGET_RPM, REVERSE);
+            fr->spin(fr, TARGET_RPM, REVERSE);
+            rr->spin(rr, TARGET_RPM, REVERSE);
+            rl->spin(rl, TARGET_RPM, REVERSE);
             return;
         case 4: // Left
             // todo: NEED TO TEST, might need to swap w/ right
-            fl->spinMotor(fl, TARGET_RPM, FORWARD);
-            fr->spinMotor(fr, TARGET_RPM, REVERSE);
-            rr->spinMotor(rr, TARGET_RPM, FORWARD);
-            rl->spinMotor(rl, TARGET_RPM, REVERSE);
+            fl->spin(fl, TARGET_RPM, FORWARD);
+            fr->spin(fr, TARGET_RPM, REVERSE);
+            rr->spin(rr, TARGET_RPM, FORWARD);
+            rl->spin(rl, TARGET_RPM, REVERSE);
     }
 }

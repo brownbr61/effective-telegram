@@ -1,10 +1,3 @@
-//
-// Motor min. operating speed 200 RPM (+/- 10%) w/ 1:48 gear ratio
-//
-
-#ifndef EFFECTIVE_TELEGRAM_MOTOR_H
-#define EFFECTIVE_TELEGRAM_MOTOR_H
-
 #define NUM_MOTORS 4
 
 // todo: these values will need to be tested & changed
@@ -20,7 +13,7 @@ struct Motor {
     uint16_t motor_speed;               // Measured motor speed
     uint16_t error;                     // Speed error signal
     uint16_t error_integral;            // Integrated error signal
-    void (*spin)(struct Motor*);
+    void (*spin)(struct Motor*, uint16_t, int);
     void (*stop)(struct Motor*);
     void (*setCycle)(struct Motor*, uint8_t);
     void (*correctError)(struct Motor*);
@@ -32,13 +25,20 @@ struct Motor {
     TIM_TypeDef *pwmTimer;
 
     GPIO_TypeDef *dirGpio;
-    uint8t dir_pin_A;
-    uint8t dir_pin_B;
+    uint8_t dir_pin_A;
+    uint8_t dir_pin_B;
 
     // todo: do we need any other mp pointers linked in here?
 };
 
-uint64_t encoderCounts[4];
+// Starting at top left (US driver's side front), motors go clockwise
+// 0 = front left
+// 1 = front right
+// 2 = rear right
+// 3 = rear left
+struct Motor motors[4];
+
+uint64_t encoderCounts[] = { 0, 0, 0, 0 };
 
 /* A single object to assign/control our motor connections to the STM32 Discovery board.
  * Note: I was able to use the same GPIO ports for all direction and encoder ports
@@ -67,11 +67,13 @@ struct MotorPinout {
     uint16_t exti_codes[4];         // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
 };
 
+struct LEDs *leds;
+
 // Initializes entire class and structure necessary for motion
-void initMotion(struct Motor*, uint32_t);
+void initMotion(struct LEDs*);
 
 // Initializes all four motor structs
-void initMotors(void);
+void initMotors(struct MotorPinout*);
 
 // Sets up all PWM pins and direction signals to drive the H-Bridges
 void initPWMs(struct MotorPinout*);
@@ -83,15 +85,13 @@ void initEncoders(struct MotorPinout*);
 void assignPins(struct MotorPinout*);
 
 // PI control code is called within a timer interrupt
-void updatePI(uint8_t);
+void PI_update(struct Motor*);
 
 // Set the duty cycle of the PWM, accepts (0-100)
-void pwm_setDutyCycle(uint8_t, uint8_t);
+void pwm_setDutyCycle(struct Motor*, uint8_t);
 
 // Go at given speed
-void spinMotor(struct Motor*, uint16_t);
+void spinMotor(struct Motor*, uint16_t, int);
 
 // Don't go
 void stopMotor(struct Motor*);
-
-#endif //EFFECTIVE_TELEGRAM_MOTOR_H
