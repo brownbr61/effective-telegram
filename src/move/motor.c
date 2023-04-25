@@ -1,14 +1,15 @@
 #include "motor.h"
+#include "../main.h"
 
 void fillDirPins(int *allPins, struct MotorPinout *mp);
 // Sets up the entire motor drive system
 void initMotion(struct LEDs *leds_in) {
+    leds = leds_in;
     struct MotorPinout mp;
     assignPins(&mp);
     initMotors(&mp);
     initPWMs(&mp);
     initEncoders(&mp);
-    leds = leds_in;
 }
 
 /* Initializes all motors in the forward direction in a stopped state */
@@ -27,27 +28,27 @@ void initMotors(struct MotorPinout *mp) {
         motor->stop = &stopMotor;
 
         motor->pwmGpio = mp->pwmGpio;
-        *motor->pwm_in_pin = mp->pwm_in_pins[i];
-        *motor->pwm_alt_fxn_code = mp->pwm_alt_fxn_codes[i];
+        motor->pwm_in_pin = mp->pwm_in_pins[i];
+        motor->pwm_alt_fxn_code = mp->pwm_alt_fxn_codes[i];
 
         motor->dirGpio = mp->dirGpio;
         switch (i) {
             case 0:
                 motor->dir_pin_A = mp->mtr_A_dir_pins[0];
                 motor->dir_pin_B = mp->mtr_A_dir_pins[1];
-                return;
+                break;
             case 1:
                 motor->dir_pin_A = mp->mtr_B_dir_pins[0];
                 motor->dir_pin_B = mp->mtr_B_dir_pins[1];
-                return;
+                break;
             case 2:
                 motor->dir_pin_A = mp->mtr_C_dir_pins[0];
                 motor->dir_pin_B = mp->mtr_C_dir_pins[1];
-                return;
+                break;
             case 3:
                 motor->dir_pin_A = mp->mtr_D_dir_pins[0];
                 motor->dir_pin_B = mp->mtr_D_dir_pins[1];
-                return;
+                break;
         }
     }
 }
@@ -55,10 +56,10 @@ void initMotors(struct MotorPinout *mp) {
 /* Pin assignment for the PWM input and motor direction outputs.
  * Note: using a single timer for all four PWM input pins to keep motors at synched RPMs */
 void assignPins(struct MotorPinout *mp) {
-    mp->pwm_in_pins[0] = 6;  // PC6
-    mp->pwm_in_pins[1] = 7;  // PC7
-    mp->pwm_in_pins[2] = 8;  // PC8
-    mp->pwm_in_pins[3] = 9;  // PC9
+    mp->pwm_in_pins[0] = 0;  // PA0
+    mp->pwm_in_pins[1] = 1;  // PA1
+    mp->pwm_in_pins[2] = 2;  // PA2
+    mp->pwm_in_pins[3] = 3;  // PA3
 
     mp->pwm_alt_fxn_codes[0] = 0x0;  // AF0/0000
     mp->pwm_alt_fxn_codes[1] = 0x0;  // AF0/0000
@@ -87,9 +88,9 @@ void assignPins(struct MotorPinout *mp) {
     mp->pwmGpio = GPIOC;
     mp->dirGpio = GPIOB;
     mp->encGpio = GPIOA;
-    mp->pwmTimer = TIM3;
+    mp->pwmTimer = TIM2;
     mp->encTimer = TIM1;
-    *mp->extLine = EXTI4_15_IRQn;            // NOTE: IF THIS CHANGES, NEED TO MANUALLY UPDATE INTERRUPT HANDLER
+    mp->extLine = EXTI4_15_IRQn;            // NOTE: IF THIS CHANGES, NEED TO MANUALLY UPDATE INTERRUPT HANDLER
     mp->sysCfgExtiBucket = 2;
     mp->exti_codes[0] = SYSCFG_EXTICR3_EXTI8_PA;
     mp->exti_codes[1] = SYSCFG_EXTICR3_EXTI9_PA;
@@ -190,11 +191,11 @@ void initEncoders(struct MotorPinout *mp) {
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;  // todo: this is not pin agnostic
 
     // Enable interrupts
-    NVIC_EnableIRQ(*mp->extLine);
+    NVIC_EnableIRQ(mp->extLine);
     // todo: is this sufficient for enabling EXTI interrupts or do I need to mask interrupts specifically on the EXTI->IMR register?
 
     // Set interrupt priority
-    NVIC_SetPriority(*mp->extLine, 3);
+    NVIC_SetPriority(mp->extLine, 3);
 
     for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = mp->enc_pins[i] * 2;            // 2 bits per pin for MODER, OSPEEDR, and PUPDR

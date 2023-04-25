@@ -25,13 +25,19 @@ int main(void)
   initSensorData(&ledSensor);
   leds.green = 1;
   leds.set(&leds);
-  DELAY(500);
-  leds.green = 0;
-  leds.set(&leds);
 
+  DELAY(500);
   initMotion(&leds);
-  leds.blue = 1;
+  leds.green = 1;
   leds.set(&leds);
+  DELAY(5000);
+  leds.green = 1;
+  leds.set(&leds);
+  DELAY(5000);
+
+  leds.red = 1;
+  leds.set(&leds);
+  DELAY(5000);
 
   moveForward();
   DELAY(5000);

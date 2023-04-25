@@ -20,8 +20,8 @@ struct Motor {
 
     // Pointers to the pins that control this motor (convenience variables)
     GPIO_TypeDef *pwmGpio;
-    uint8_t *pwm_in_pin;
-    uint8_t *pwm_alt_fxn_code;
+    uint8_t pwm_in_pin;
+    uint8_t pwm_alt_fxn_code;
     TIM_TypeDef *pwmTimer;
 
     GPIO_TypeDef *dirGpio;
@@ -37,6 +37,7 @@ struct Motor {
 // 2 = rear right
 // 3 = rear left
 struct Motor motors[4];
+
 
 uint64_t encoderCounts[] = { 0, 0, 0, 0 };
 
@@ -62,7 +63,7 @@ struct MotorPinout {
     uint8_t enc_pins[4];            // Used for encoder A outputs from H-Bridge
     uint8_t enc_alt_fxn_codes[4];   // The alternate function codes corresponding to the chosen encoder pins
     TIM_TypeDef *encTimer;          // Timer associated with encoder pins; used to calculate speed (must coordinate with enc array)
-    uint8_t *extLine;               // EXTI peripheral line tied to count interrupts
+    uint8_t extLine;               // EXTI peripheral line tied to count interrupts
     uint8_t sysCfgExtiBucket;       // The index which the chosen encoder pins correspond to in the SYSCFG_EXTICR buckets (values 0-3) [i.e. 0: 0-3, 1: 4-7, etc]
     uint16_t exti_codes[4];         // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
 };
