@@ -51,26 +51,31 @@ int main(void)
 }
 
 // Convenience methods
-void moveForward(void) {
+void stop(void) {
     move(0);
 }
 
-void moveRight(void) {
+void moveForward(void) {
     move(1);
 }
 
-void moveBackward(void) {
+void moveRight(void) {
     move(2);
 }
 
-void moveLeft(void) {
+void moveBackward(void) {
     move(3);
 }
 
+void moveLeft(void) {
+    move(4);
+}
+
+// Actual movement logic
 void move(uint8_t direction) {
     const int FORWARD = 1;
     const int REVERSE = -1;
-    const TARGET_RPM = 100;
+    const TARGET_RPM = 100; // todo: placeholder
 
     struct Motor *fl = motors[0];   // Front left
     struct Motor *fr = motors[1];   // Front right
@@ -78,35 +83,36 @@ void move(uint8_t direction) {
     struct Motor *rl = motors[3];   // Rear left
 
     switch (direction) {
-        // Forward
-        case 0:
+        case 0: // Stop
+            fl->stopMotor(fr);
+            fr->stopMotor(fr);
+            rr->stopMotor(rr);
+            rl->stopMotor(rl);
+            return;
+        case 1: // Forward
             fl->spinMotor(fl, TARGET_RPM, FORWARD);
             fr->spinMotor(fr, TARGET_RPM, FORWARD);
             rr->spinMotor(rr, TARGET_RPM, FORWARD);
             rl->spinMotor(rl, TARGET_RPM, FORWARD);
             return;
-            // Right
-        case 1:
+        case 2: // Right
             // todo: NEED TO TEST, might need to swap w/ left
             fl->spinMotor(fl, TARGET_RPM, REVERSE);
             fr->spinMotor(fr, TARGET_RPM, FORWARD);
             rr->spinMotor(rr, TARGET_RPM, REVERSE);
             rl->spinMotor(rl, TARGET_RPM, FORWARD);
             return;
-            // Backward
-        case 2:
+        case 3: // Backward
             fl->spinMotor(fl, TARGET_RPM, REVERSE);
             fr->spinMotor(fr, TARGET_RPM, REVERSE);
             rr->spinMotor(rr, TARGET_RPM, REVERSE);
             rl->spinMotor(rl, TARGET_RPM, REVERSE);
             return;
-            // Left
-        case 3:
+        case 4: // Left
             // todo: NEED TO TEST, might need to swap w/ right
             fl->spinMotor(fl, TARGET_RPM, FORWARD);
             fr->spinMotor(fr, TARGET_RPM, REVERSE);
             rr->spinMotor(rr, TARGET_RPM, FORWARD);
             rl->spinMotor(rl, TARGET_RPM, REVERSE);
-            return;
     }
 }
