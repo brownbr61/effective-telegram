@@ -7,25 +7,18 @@
 const uint32_t SystemCoreClock = 48000000;
 
 #include "stm32f072xb.h"
+#include "output/leds.c"
+#include "output/uart.c"
 #include "Sensor/Sensor.c"
 #include "Sensor/Filter.c"
 #include "Sensor/SensorData.c"
-#include "output/leds.c"
-#include "output/uart.c"
-#include "motor/motor.c"
+#include "move/motor.c"
 
 
 #define REDLED (6)
 #define BLUELED (7)
 #define ORANGELED (8)
 #define GREENLED (9)
-
-// Starting at top left (US driver's side front), motors go clockwise
-// 0 = front left
-// 1 = front right
-// 2 = rear right
-// 3 = rear left
-struct Motor motors[4];
 
 extern volatile uint32_t tick;
 
@@ -56,6 +49,7 @@ void ERROR(char *err) {
     // todo: add string transmit to UART class
 }
 
+void stop();
 void move(uint8_t direction);
 void moveForward(void);
 void moveRight(void);
