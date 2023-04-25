@@ -248,6 +248,7 @@ void TIM6_DAC_IRQHandler(void) {
 
 /* The handler fired for each tick interrupt.
  * Increments the appropriate count variable according to which encoder fired the event. */
+// todo: discuss thread safety with team
 void EXTI4_15_IRQHandler(void)
     // NOTE: there is no way to make this pin agnostic, have to manually update consts below if pins are changed
     const int ENC_PINS[] = {8, 9, 10, 11};
