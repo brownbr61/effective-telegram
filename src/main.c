@@ -53,6 +53,7 @@ int main(void)
   // initMotion(&leds);
   leds.blue = 1;
   leds.set(&leds);
+  DELAY(5000);
 
   moveForward();
   DELAY(5000);

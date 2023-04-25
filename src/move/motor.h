@@ -20,8 +20,8 @@ struct Motor {
 
     // Pointers to the pins that control this motor (convenience variables)
     GPIO_TypeDef *pwmGpio;
-    uint8_t *pwm_in_pin;
-    uint8_t *pwm_alt_fxn_code;
+    uint8_t pwm_in_pin;
+    uint8_t pwm_alt_fxn_code;
     TIM_TypeDef *pwmTimer;
 
     GPIO_TypeDef *dirGpio;
@@ -37,6 +37,7 @@ struct Motor {
 // 2 = rear right
 // 3 = rear left
 struct Motor motors[4];
+
 
 uint64_t encoderCounts[] = { 0, 0, 0, 0 };
 
