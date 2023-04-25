@@ -28,10 +28,7 @@ int main(void)
 
   DELAY(500);
   initMotion(&leds);
-  leds.green = 1;
-  leds.set(&leds);
-  DELAY(5000);
-  leds.green = 1;
+  leds.green = 0;
   leds.set(&leds);
   DELAY(5000);
 

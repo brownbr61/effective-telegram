@@ -85,7 +85,7 @@ void assignPins(struct MotorPinout *mp) {
     mp->pwm_alt_fxn_codes[2] = 0x2;  // AF2/0010
     mp->pwm_alt_fxn_codes[3] = 0x2;  // AF2/0010
     
-    mp->pwmGpio = GPIOC;
+    mp->pwmGpio = GPIOA;
     mp->dirGpio = GPIOB;
     mp->encGpio = GPIOA;
     mp->pwmTimer = TIM2;
