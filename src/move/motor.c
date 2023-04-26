@@ -136,8 +136,8 @@ void initPWMs(struct MotorPinout *mp) {
     // Set up GPIO output pins for motor direction control
     int allDirPins[8];
     fillDirPins(allDirPins, mp);
-    for (int i = 0; i < (NUM_MOTORS*2); i++) {
-        int pinIdx = allDirPins[i];
+    for (int i = 0; i < (NUM_MOTORS * 2); i++) {
+        int pinIdx = allDirPins[i] * 2;
         mp->dirGpio->MODER &= ~(11 << pinIdx);  // Clear
         mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
     }
@@ -208,7 +208,7 @@ void initEncoders(struct MotorPinout *mp) {
     NVIC_SetPriority(mp->extLine, 3);
 
     for (int i = 0; i < NUM_MOTORS; i++) {
-        int pinIdx = mp->enc_pins[i];
+        int pinIdx = mp->enc_pins[i] * 2;
 
         // Set GPIO pins to input mode
         mp->encGpio->MODER &= ~(11 << pinIdx); 		// Clear to input mode
@@ -389,8 +389,7 @@ void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
             this->dirGpio->ODR |= (1 << pinIdxB);
             this->dirGpio->ODR &= ~(1 << pinIdxA);
         } else {
-            leds->red = 1;
-            leds->set(leds);
+            uart_ptr->transmit(255);
         }
     }
 
