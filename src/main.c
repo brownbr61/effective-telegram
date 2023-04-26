@@ -23,18 +23,11 @@ int main(void)
   initUart(&uart);
 
   initSensorData(&ledSensor);
+
+  initMotion(&leds, &uart);
+
   leds.green = 1;
   leds.set(&leds);
-
-  DELAY(500);
-  initMotion(&leds);
-  leds.green = 0;
-  leds.set(&leds);
-  DELAY(5000);
-
-  leds.red = 1;
-  leds.set(&leds);
-  DELAY(5000);
 
   moveForward();
   DELAY(5000);
@@ -48,23 +41,23 @@ int main(void)
 }
 
 // Convenience methods
-void stop(void) {
+void stop() {
     move(0);
 }
 
-void moveForward(void) {
+void moveForward() {
     move(1);
 }
 
-void moveRight(void) {
+void moveRight() {
     move(2);
 }
 
-void moveBackward(void) {
+void moveBackward() {
     move(3);
 }
 
-void moveLeft(void) {
+void moveLeft() {
     move(4);
 }
 

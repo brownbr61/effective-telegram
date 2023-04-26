@@ -3,8 +3,6 @@ struct UART_INT {
   void (*transmit)(uint16_t);
 };
 
-// todo: add in transmitString for debugging purposes/ERROR fxn
-
 void transmitValue(uint8_t val) {
   // Wait until our tx reg is ready
   volatile int wait = 1;
@@ -20,6 +18,22 @@ void transmit2bytes(uint16_t val) {
   transmitValue(val);
 }
 
+void transmitChar(char c) {
+    // Wait until our tx reg is ready
+    volatile int wait = 1;
+    while (wait)
+        if (USART3->ISR & 0x80)
+            wait = 0;
+    // Write to tx reg
+    USART3->TDR = c;
+}
+
+void transmitString(char* s) {
+    while (*s != 0) {
+        transmitChar(*s++);
+    }
+}
+
 void initUart(struct UART_INT* this) {
   // Set PC10 and PC11 to alt fx mode
   RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
@@ -28,7 +42,7 @@ void initUart(struct UART_INT* this) {
 
   // Set PC10 to AF1 for USART3_TX/RX
   GPIOC->AFR[1] &= ~(0xFF00);   	 // Clear
-  GPIOC->AFR[1] |= 0x1100;   		 // Set 11 and 10 to 0001
+  GPIOC->AFR[1] |= 0x1100;   		 // Set 11 and 10 to 000
 
   // Enable system clock for USART3
   RCC->APB1ENR |= RCC_APB1ENR_USART3EN;

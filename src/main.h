@@ -49,7 +49,7 @@ void ERROR(char *err) {
     // todo: add string transmit to UART class
 }
 
-void stop();
+void stop(void);
 void move(uint8_t direction);
 void moveForward(void);
 void moveRight(void);

@@ -68,10 +68,12 @@ struct MotorPinout {
     uint16_t exti_codes[4];         // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
 };
 
+// Debugging
 struct LEDs *leds;
+struct UART_INT *uart_ptr;
 
 // Initializes entire class and structure necessary for motion
-void initMotion(struct LEDs*);
+void initMotion(struct LEDs*, struct UART_INT*);
 
 // Initializes all four motor structs
 void initMotors(struct MotorPinout*);
