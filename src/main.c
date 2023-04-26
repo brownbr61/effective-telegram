@@ -29,6 +29,9 @@ int main(void)
   for (volatile int i = 0; i < 2400000; i++) {}
 
   initSensorData(&ledSensor);
+
+  initMotion(&leds, &uart);
+
   leds.green = 1;
   leds.set(&leds);
   for (volatile int i = 0; i < 2400000; i++) {}
@@ -67,23 +70,23 @@ int main(void)
 }
 
 // Convenience methods
-void stop(void) {
+void stop() {
     move(0);
 }
 
-void moveForward(void) {
+void moveForward() {
     move(1);
 }
 
-void moveRight(void) {
+void moveRight() {
     move(2);
 }
 
-void moveBackward(void) {
+void moveBackward() {
     move(3);
 }
 
-void moveLeft(void) {
+void moveLeft() {
     move(4);
 }
 
