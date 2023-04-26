@@ -17,6 +17,7 @@ void initMotion(struct LEDs *leds_in, struct UART_INT *uart_in) {
 void initMotors(struct MotorPinout *mp) {
     for (int i = 0; i < NUM_MOTORS; i++) {
         struct Motor *motor = &(motors[i]);
+        motor->id = i + 1; // Range is 1-4
         motor->direction = 1;
         motor->target_rpm = 0;
         motor->motor_speed = 0;
@@ -85,7 +86,7 @@ void assignPins(struct MotorPinout *mp) {
     mp->enc_alt_fxn_codes[1] = 0x2;  // AF2/0010
     mp->enc_alt_fxn_codes[2] = 0x2;  // AF2/0010
     mp->enc_alt_fxn_codes[3] = 0x2;  // AF2/0010
-    
+
     mp->pwmGpio = GPIOA;
     mp->dirGpio = GPIOB;
     mp->encGpio = GPIOA;
@@ -97,7 +98,6 @@ void assignPins(struct MotorPinout *mp) {
     mp->exti_codes[1] = SYSCFG_EXTICR3_EXTI9_PA;
     mp->exti_codes[2] = SYSCFG_EXTICR3_EXTI10_PA;
     mp->exti_codes[3] = SYSCFG_EXTICR3_EXTI11_PA;
-
 }
 
 // Sets up the PWM and direction signals to drive the H-Bridge
@@ -119,7 +119,7 @@ void initPWMs(struct MotorPinout *mp) {
         if (pinIdx > 7) {
             mp->pwmGpio->AFR[1] &= ~(0xF << pinIdx);    // Clear
             mp->pwmGpio->AFR[1] |= (afVal << pinIdx);   // Assign
-        // Pins 0-6 in AFR[0]
+            // Pins 0-6 in AFR[0]
         } else {
             mp->pwmGpio->AFR[0] &= ~(0xF << pinIdx);    // Clear
             mp->pwmGpio->AFR[0] |= (afVal << pinIdx);   // Assign
@@ -131,6 +131,7 @@ void initPWMs(struct MotorPinout *mp) {
     fillDirPins(allDirPins, mp);
     for (int i = 0; i < (NUM_MOTORS * 2); i++) {
         int pinIdx = allDirPins[i] * 2;
+        uart_ptr->transmit(pinIdx);
         mp->dirGpio->MODER &= ~(11 << pinIdx);  // Clear
         mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
     }
@@ -148,15 +149,18 @@ void initPWMs(struct MotorPinout *mp) {
     }
 
     // Set up PWM timer
-    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; // todo: this is not pin agnostic
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN; // todo: this is not pin agnostic
     mp->pwmTimer->CR1 = 0;
     mp->pwmTimer->CCMR1 = 0;                       // (prevents having to manually clear bits)
     mp->pwmTimer->CCER = 0;
 
     // Set output-compare CH1 to PWM1 mode and enable CCR1 preload buffer
-    // todo: didn't alter these at all... may need to change according to our TT motors?
-    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1PE);
-    mp->pwmTimer->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
+    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1PE); // Enable channel 1
+    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE); // Enable channel 2
+    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3PE); // Enable channel 3
+    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4PE); // Enable channel 4
+
+    mp->pwmTimer->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E);           // Enable capture-compare channel 1-4
     mp->pwmTimer->PSC = 1;                         // Run timer on 24Mhz
     mp->pwmTimer->ARR = 1200;                      // PWM at 20kHz
 
@@ -199,7 +203,7 @@ void initEncoders(struct MotorPinout *mp) {
     NVIC_SetPriority(mp->extLine, 3);
 
     for (int i = 0; i < NUM_MOTORS; i++) {
-        int pinIdx = mp->enc_pins[i] * 2;
+        int pinIdx = mp->enc_pins[i] * 2;               // Two bits per pin here
 
         // Set GPIO pins to input mode
         mp->encGpio->MODER &= ~(11 << pinIdx); 		// Clear to input mode
@@ -294,8 +298,8 @@ void EXTI4_15_IRQHandler(void) {
             EXTI->PR &= ~(1 << pinIdx);
         }
     }
-        leds->red = 0;
-        leds->set(leds);
+    leds->red = 0;
+    leds->set(leds);
 }
 
 // Calculates error for single motor and resets PWM signal
@@ -330,6 +334,7 @@ void PI_update(struct Motor *this) {
 
 // Set the duty cycle of the PWM, accepts (0-100)
 void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
+    uint32_t TEST_VAL = 840;
     if(duty <= 100) {
         leds->orange = 1;
         leds->set(leds);
@@ -337,24 +342,28 @@ void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
         uint8_t motorIdx = this->id;
         switch (motorIdx) {
             case 1:
+                uart_ptr->transmit(222);
                 //this->pwmTimer->CCR1 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
-                this->pwmTimer->CCR1 = 360;
+                this->pwmTimer->CCR1 = TEST_VAL;
                 break;
             case 2:
-                this->pwmTimer->CCR2 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                //this->pwmTimer->CCR2 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                this->pwmTimer->CCR2 = TEST_VAL;
                 break;
             case 3:
-                this->pwmTimer->CCR3 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                //this->pwmTimer->CCR3 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                this->pwmTimer->CCR3 = TEST_VAL;
                 break;
             case 4:
-                this->pwmTimer->CCR4 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                //this->pwmTimer->CCR4 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
+                this->pwmTimer->CCR4 = TEST_VAL;
                 break;
-            // default:
-            //     ERROR("Incorrect motor index supplied to set PWM duty cycle \n\r");
+                // default:
+                //     ERROR("Incorrect motor index supplied to set PWM duty cycle \n\r");
         }
         leds->orange = 0;
         leds->set(leds);
-    } 
+    }
     // else {
     //     ERROR("Invalid duty cycle value supplied to set PWM duty cycle \n\r");
     // }
@@ -400,3 +409,4 @@ void stopMotor(struct Motor *this) {
     this->target_rpm = 0;
     // todo: is setting target_rpm sufficient here?
 }
+
