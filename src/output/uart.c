@@ -14,8 +14,8 @@ void transmitValue(uint8_t val) {
 }
 
 void transmit2bytes(uint16_t val) {
-  transmitValue(val >> 8);
-  transmitValue(val);
+  transmitValue((uint8_t)(val >> 8));
+  transmitValue((uint8_t)val);
 }
 
 void initUart(struct UART_INT* this) {

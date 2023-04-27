@@ -4,3 +4,5 @@
 *.elf
 *.exe
 data/out/
+tmp/
+tmp*

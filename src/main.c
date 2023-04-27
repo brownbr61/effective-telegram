@@ -21,20 +21,31 @@ int main(void)
   initLEDs(&leds);
   leds.red = 1;
   leds.set(&leds);
+  for (volatile int i = 0; i < 2400000; i++) {}
 
   initUart(&uart);
   leds.orange = 1;
   leds.set(&leds);
+  for (volatile int i = 0; i < 2400000; i++) {}
 
   initSensorData(&ledSensor);
   leds.green = 1;
   leds.set(&leds);
+  for (volatile int i = 0; i < 2400000; i++) {}
 
   // todo: init motors and drivers
 
+  uint16_t tmp;
+  int i = 0;
+
   while(1) {
-    uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
-    leds.blue = ledSensor.diverges(&ledSensor);
+    tmp = (uint16_t)(ledSensor.sensor.read(&ledSensor.sensor));
+    ledSensor.filter.filter(&ledSensor.filter, tmp);
+    // uart.transmit(tmp);
+    if ((i++ % 1200) != 0) {
+      leds.blue = leds.blue == 0;
+      uart.transmit(ledSensor.filter.fOut);
+    }
     leds.set(&leds);
   }
 }
