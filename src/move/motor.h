@@ -38,6 +38,7 @@ struct Motor {
 // 3 = rear left
 struct Motor motors[4];
 
+void lab_pwm_init(void);
 
 uint64_t encoderCounts[] = { 0, 0, 0, 0 };
 
