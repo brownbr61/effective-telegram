@@ -9,7 +9,8 @@ void initMotion(struct LEDs *leds_in, struct UART_INT *uart_in) {
     struct MotorPinout mp;
     assignPins(&mp);
     initMotors(&mp);
-    initPWMs(&mp);
+    lab_pwm_init();
+    //initPWMs(&mp);
     initEncoders(&mp);
 }
 
@@ -19,7 +20,7 @@ void initMotors(struct MotorPinout *mp) {
         struct Motor *motor = &(motors[i]);
         motor->id = i + 1; // Range is 1-4
         motor->direction = 1;
-        motor->target_rpm = 0;
+        motor->target_rpm = 100;
         motor->motor_speed = 0;
         motor->error = 0;
         motor->error_integral = 0;
@@ -103,6 +104,8 @@ void assignPins(struct MotorPinout *mp) {
 // Sets up the PWM and direction signals to drive the H-Bridge
 void initPWMs(struct MotorPinout *mp) {
 
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
+
     // Set all four pin choices to alt fxn mode
     for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = mp->pwm_in_pins[i];
@@ -129,14 +132,13 @@ void initPWMs(struct MotorPinout *mp) {
     // Set up GPIO output pins for motor direction control
     int allDirPins[8];
     fillDirPins(allDirPins, mp);
+    mp->dirGpio->MODER &= (0xFF << 4);    // Clear
     for (int i = 0; i < (NUM_MOTORS * 2); i++) {
         int pinIdx = allDirPins[i] * 2;
-        uart_ptr->transmit(pinIdx);
         mp->dirGpio->MODER &= ~(11 << pinIdx);  // Clear
         mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
     }
 
-    // todo: does this set forward or backwards? Need to test
     // For each motor, initialize one direction pin to high, the other low
     for (int i = 0; i < (NUM_MOTORS*2); i++) {
         int pinIdx = allDirPins[i];
@@ -144,32 +146,86 @@ void initPWMs(struct MotorPinout *mp) {
         if (i%2 == 0) {
             mp->dirGpio->ODR |= (1 << pinIdx);
         } else {
+            leds->set(leds);
             mp->dirGpio->ODR &= ~(1 << pinIdx);
         }
     }
 
     // Set up PWM timer
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN; // todo: this is not pin agnostic
-    mp->pwmTimer->CR1 = 0;
-    mp->pwmTimer->CCMR1 = 0;                       // (prevents having to manually clear bits)
+    mp->pwmTimer->CR1 = 0;                          // Clears; defaults to edge-aligned upcounting
+    mp->pwmTimer->CCMR1 = 0;                        // (prevents having to manually clear bits)
     mp->pwmTimer->CCER = 0;
 
-    // Set output-compare CH1 to PWM1 mode and enable CCR1 preload buffer
-    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1PE); // Enable channel 1
-    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2PE); // Enable channel 2
-    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3PE); // Enable channel 3
-    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4PE); // Enable channel 4
+    // TODO: FIRST GET RID OF PRELOAD HERE
+    // Set output-compare CH1-4 to PWM1 mode and enable CCR1 preload buffer
+    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE); // Enable channel 1
+    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1); //| TIM_CCMR1_OC2PE); // Enable channel 2
+    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1); //| TIM_CCMR2_OC3PE); // Enable channel 3
+    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1); //| TIM_CCMR2_OC4PE); // Enable channel 4
 
     mp->pwmTimer->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E);           // Enable capture-compare channel 1-4
     mp->pwmTimer->PSC = 1;                         // Run timer on 24Mhz
     mp->pwmTimer->ARR = 1200;                      // PWM at 20kHz
 
-    mp->pwmTimer->CCR1 = 0;                        // Start PWMs at 0% duty cycle
-    mp->pwmTimer->CCR2 = 0;
-    mp->pwmTimer->CCR3 = 0;
-    mp->pwmTimer->CCR4 = 0;
+    //the output pin begins the PWM period at a
+    //low state and goes high once the timer’s counter matches the CCRx register; this output resets to low
+    //again when the next period starts. The location of the CCRx value relative to the ARR register value
+    //determines the overall ratio of on/off (duty cycle)
+
+    //consider PWM mode 1. The reference PWM signal OCxREF is
+    //high as long as TIMx_CNT <TIMx_CCRx else it becomes low.
+    // todo: try lowering these values
+    mp->pwmTimer->CCR1 = 100;                        // Start PWMs at 0% duty cycle
+    mp->pwmTimer->CCR2 = 200;
+    mp->pwmTimer->CCR3 = 900;
+    mp->pwmTimer->CCR4 = 1200;
 
     mp->pwmTimer->CR1 |= TIM_CR1_CEN;              // Enable timer
+
+    // DEBUGGING todo: try this second
+    mp->pwmTimer->EGR |= 1; // todo: forces register update
+    //As the preload registers are transferred to the shadow registers only when an update event
+    //occurs, before starting the counter, all registers must be initialized by setting the UG bit in
+    //the TIMx_EGR register.
+}
+
+void lab_pwm_init(void) {
+
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+
+    // Set up pin PA4 for H-bridge PWM output (TIMER 14 CH1)
+    GPIOA->MODER |= (1 << 9);
+    GPIOA->MODER &= ~(1 << 8);
+
+    // Set PA4 to AF4,
+    GPIOA->AFR[0] &= 0xFFF0FFFF; // clear PA4 bits,
+    GPIOA->AFR[0] |= (1 << 18);
+
+    // Set up a PA5, PA6 as GPIO output pins for motor direction control
+    GPIOA->MODER &= 0xFFFFC3FF; // clear PA5, PA6 bits,
+    GPIOA->MODER |= (1 << 10) | (1 << 12);
+
+    //Initialize one direction pin to high, the other low
+    GPIOA->ODR |= (1 << 5);
+    GPIOA->ODR &= ~(1 << 6);
+
+    // Set up PWM timer
+    RCC->APB1ENR |= RCC_APB1ENR_TIM14EN;
+    TIM14->CR1 = 0;                         // Clear control registers
+    TIM14->CCMR1 = 0;                       // (prevents having to manually clear bits)
+    TIM14->CCER = 0;
+
+    // Set output-compare CH1 to PWM1 mode and enable CCR1 preload buffer
+    TIM14->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE);
+    TIM14->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
+    TIM14->PSC = 1;                         // Run timer on 24Mhz
+    TIM14->ARR = 1200;                      // PWM at 20kHz
+    TIM14->CCR1 = 400;                        // Start PWM at 0% duty cycle
+
+    TIM14->CR1 |= TIM_CR1_CEN;              // Enable timer
+
+    TIM14->EGR |= 1;
 }
 
 /* Internal Helper Function
@@ -342,7 +398,7 @@ void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
         uint8_t motorIdx = this->id;
         switch (motorIdx) {
             case 1:
-                uart_ptr->transmit(222);
+                //uart_ptr->transmit(222);
                 //this->pwmTimer->CCR1 = ((uint32_t)duty * autoReload)/100;  // Use linear transform to produce CCR1 value
                 this->pwmTimer->CCR1 = TEST_VAL;
                 break;
