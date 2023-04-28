@@ -11,8 +11,12 @@ void initMotion(struct LEDs *leds_in) {
     assignPins(&mp);
     transmit2bytes(1);
     initMotors(&mp);
-    lab_pwm_init();
-    //initPWMs(&mp);
+    //initDirection(&mp);
+
+    initPWMsT2(&mp);
+//    lab_pwm_init();
+//    initPWMsT1(&mp);
+
     initEncoders(&mp);
     transmit2bytes(4);
     leds = leds_in;
@@ -34,6 +38,7 @@ void initMotors(struct MotorPinout *mp) {
         motor->spin = &spinMotor;
         motor->stop = &stopMotor;
 
+        // todo: change when we get timer3 working
         motor->pwmGpio = mp->pwmGpio;
         motor->pwm_in_pin = mp->pwm_in_pins[i];
         motor->pwm_alt_fxn_code = mp->pwm_alt_fxn_codes[i];
@@ -107,32 +112,26 @@ void assignPins(struct MotorPinout *mp) {
 }
 
 // Sets up the PWM and direction signals to drive the H-Bridge
-void initPWMs(struct MotorPinout *mp) {
-
+// todo: this works
+void initPWMsT2(struct MotorPinout *mp) {
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
 
-    // Set all four pin choices to alt fxn mode
-    for (int i = 0; i < NUM_MOTORS; i++) {
-        int pinIdx = mp->pwm_in_pins[i];
-        mp->pwmGpio->MODER |= (1 << (pinIdx + 1));
-        mp->pwmGpio->MODER &= ~(1 << pinIdx);
-    }
+    // Set up pin PA4 for H-bridge PWM output (TIMER 2 CH1+2)
+    mp->pwmGpio->MODER |= (1 << 1);
+    mp->pwmGpio->MODER &= ~(1 << 0);
+    mp->pwmGpio->MODER |= (1 << 3);
+    mp->pwmGpio->MODER &= ~(1 << 2);
+    mp->pwmGpio->MODER |= (1 << 5);
+    mp->pwmGpio->MODER &= ~(1 << 4);
+    mp->pwmGpio->MODER |= (1 << 7);
+    mp->pwmGpio->MODER &= ~(1 << 6);
 
-    // Set selected pins to correct alternate functions (AF0-AF6)
-    for (int i = 0; i < NUM_MOTORS; i++) {
-        int pinIdx = mp->pwm_in_pins[i];
-        int afVal = mp->pwm_alt_fxn_codes[i];
-
-        // Pins 7+ in AFR[1]
-        if (pinIdx > 7) {
-            mp->pwmGpio->AFR[1] &= ~(0xF << pinIdx);    // Clear
-            mp->pwmGpio->AFR[1] |= (afVal << pinIdx);   // Assign
-            // Pins 0-6 in AFR[0]
-        } else {
-            mp->pwmGpio->AFR[0] &= ~(0xF << pinIdx);    // Clear
-            mp->pwmGpio->AFR[0] |= (afVal << pinIdx);   // Assign
-        }
-    }
+    // Set PA0-1 to AF1
+    mp->pwmGpio->AFR[0] &= 0xFFFF0000; // clear PA4 bits,
+    mp->pwmGpio->AFR[0] |= (1 << 1);
+    mp->pwmGpio->AFR[0] |= (1 << 5);
+    mp->pwmGpio->AFR[0] |= (1 << 9);
+    mp->pwmGpio->AFR[0] |= (1 << 13);
 
     // Set up GPIO output pins for motor direction control
     int allDirPins[8];
@@ -162,16 +161,125 @@ void initPWMs(struct MotorPinout *mp) {
     mp->pwmTimer->CCMR1 = 0;                        // (prevents having to manually clear bits)
     mp->pwmTimer->CCER = 0;
 
-    // TODO: FIRST GET RID OF PRELOAD HERE
     // Set output-compare CH1-4 to PWM1 mode and enable CCR1 preload buffer
     mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE); // Enable channel 1
     mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1); //| TIM_CCMR1_OC2PE); // Enable channel 2
-    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1); //| TIM_CCMR2_OC3PE); // Enable channel 3
-    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1); //| TIM_CCMR2_OC4PE); // Enable channel 4
+    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1);
+    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1);
 
-    mp->pwmTimer->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E);           // Enable capture-compare channel 1-4
+    mp->pwmTimer->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E); //| TIM_CCER_CC3E | TIM_CCER_CC4E);           // Enable capture-compare channel 1-4
     mp->pwmTimer->PSC = 1;                         // Run timer on 24Mhz
-    mp->pwmTimer->ARR = 1200;                      // PWM at 20kHz
+    mp->pwmTimer->ARR = 2400;                      // PWM at 20kHz
+
+    mp->pwmTimer->CCR1 = 2000;                        // Start PWMs at 0% duty cycle
+    mp->pwmTimer->CCR2 = 2000;
+    mp->pwmTimer->CCR3 = 2000;
+    mp->pwmTimer->CCR4 = 2000;
+
+    mp->pwmTimer->CR1 |= TIM_CR1_CEN;              // Enable timer
+
+    // DEBUGGING
+    mp->pwmTimer->EGR |= 1; // todo: forces register update
+}
+
+void initDirection(struct MotorPinout *mp) {
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+
+    // Set up GPIO output pins for motor direction control
+    int allDirPins[8];
+    fillDirPins(allDirPins, mp);
+    mp->dirGpio->MODER &= (0xFF << 4);    // Clear
+    for (int i = 0; i < (NUM_MOTORS * 2); i++) {
+        int pinIdx = allDirPins[i] * 2;
+        mp->dirGpio->MODER &= ~(11 << pinIdx);  // Clear
+        mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
+    }
+
+    // For each motor, initialize one direction pin to high, the other low
+    for (int i = 0; i < (NUM_MOTORS*2); i++) {
+        int pinIdx = allDirPins[i];
+        // Set pins in even indices high, odd indices low
+        if (i%2 == 0) {
+            mp->dirGpio->ODR |= (1 << pinIdx);
+        } else {
+            leds->set(leds);
+            mp->dirGpio->ODR &= ~(1 << pinIdx);
+        }
+    }
+}
+
+void initPWMsT1(struct MotorPinout *mp) {
+
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+
+    // Set up pin PA8 for H-bridge PWM output (TIMER 1 CH1)
+    mp->pwmGpio->MODER |= (1 << 17);
+    mp->pwmGpio->MODER &= ~(1 << 16);
+
+    // Set PA8 to AF2
+    mp->pwmGpio->AFR[1] &= 0xFFFFFFF0; // clear PA4 bits,
+    mp->pwmGpio->AFR[1] = 0x00000002;
+
+    // Set up PWM timer
+    RCC->APB2ENR |= RCC_APB2ENR_TIM1EN; // todo: this is not pin agnostic
+    TIM1->CR1 = 0;                          // Clears; defaults to edge-aligned upcounting
+    TIM1->CCMR1 = 0;                        // (prevents having to manually clear bits)
+    TIM1->CCER = 0;
+
+    // Set output-compare CH1-4 to PWM1 mode and enable CCR1 preload buffer
+    TIM1->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE); // Enable channel 1
+
+    TIM1->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E); //| TIM_CCER_CC3E | TIM_CCER_CC4E);           // Enable capture-compare channel 1-4
+    TIM1->PSC = 1;                         // Run timer on 24Mhz
+    TIM1->ARR = 2400;                      // PWM at 20kHz
+
+    TIM1->CCR1 = 2000;                        // Start PWMs at 0% duty cycle
+    TIM1->CCR2 = 2000;
+
+    TIM1->CR1 |= TIM_CR1_CEN;              // Enable timer
+
+    // DEBUGGING
+    TIM1->EGR |= 1; // todo: forces register update
+
+    //As the preload registers are transferred to the shadow registers only when an update event
+    //occurs, before starting the counter, all registers must be initialized by setting the UG bit in
+    //the TIMx_EGR register.
+}
+
+void initPWMsT15(struct MotorPinout *mp) {
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
+
+    // Set all four pin choices to alt fxn mode
+    // Set up pin PA2-3 for H-bridge PWM output (TIMER 15 CH1+2)
+
+    mp->pwmGpio->MODER |= (1 << 5);
+    mp->pwmGpio->MODER &= ~(1 << 4);
+
+    mp->pwmGpio->MODER |= (1 << 7);
+    mp->pwmGpio->MODER &= ~(1 << 6);
+
+//    // Set PA2-3 to AF4,
+    mp->pwmGpio->AFR[0] &= 0xFFFF00FF; // clear PA2-3 bits,
+//    mp->pwmGpio->AFR[0] |= (1 << 24);
+//    mp->pwmGpio->AFR[0] |= (1 << 28);
+
+
+    // Set up PWM timer
+    RCC->APB2ENR |= RCC_APB2ENR_TIM15EN; // todo: this is not pin agnostic
+    TIM15->CR1 = 0;                          // Clears; defaults to edge-aligned upcounting
+    TIM15->CCMR1 = 0;                        // (prevents having to manually clear bits)
+    TIM15->CCER = 0;
+
+    // TODO: FIRST GET RID OF PRELOAD HERE
+    // Set output-compare CH1-4 to PWM1 mode and enable CCR1 preload buffer
+    TIM15->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE); // Enable channel 1
+    TIM15->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1); //| TIM_CCMR1_OC2PE); // Enable channel 2
+//    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1); //| TIM_CCMR2_OC3PE); // Enable channel 3
+//    mp->pwmTimer->CCMR2 |= (TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1); //| TIM_CCMR2_OC4PE); // Enable channel 4
+
+    TIM15->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
+    TIM15->PSC = 1;                         // Run timer on 24Mhz
+    TIM15->ARR = 2400;                      // PWM at 20kHz
 
     //the output pin begins the PWM period at a
     //low state and goes high once the timer’s counter matches the CCRx register; this output resets to low
@@ -180,23 +288,22 @@ void initPWMs(struct MotorPinout *mp) {
 
     //consider PWM mode 1. The reference PWM signal OCxREF is
     //high as long as TIMx_CNT <TIMx_CCRx else it becomes low.
-    // todo: try lowering these values
-    mp->pwmTimer->CCR1 = 100;                        // Start PWMs at 0% duty cycle
-    mp->pwmTimer->CCR2 = 200;
-    mp->pwmTimer->CCR3 = 900;
-    mp->pwmTimer->CCR4 = 1200;
+    TIM15->CCR1 = 2000;                        // Start PWMs at 0% duty cycle
+    TIM15->CCR2 = 2000;
 
-    mp->pwmTimer->CR1 |= TIM_CR1_CEN;              // Enable timer
+    TIM15->CR1 |= TIM_CR1_CEN;              // Enable timer
 
     // DEBUGGING todo: try this second
-    mp->pwmTimer->EGR |= 1; // todo: forces register update
+    TIM15->EGR |= 1; // todo: forces register update
+
     //As the preload registers are transferred to the shadow registers only when an update event
     //occurs, before starting the counter, all registers must be initialized by setting the UG bit in
     //the TIMx_EGR register.
 }
 
-void lab_pwm_init(void) {
 
+
+void lab_pwm_init(void) {
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 
     // Set up pin PA4 for H-bridge PWM output (TIMER 14 CH1)
@@ -207,14 +314,6 @@ void lab_pwm_init(void) {
     GPIOA->AFR[0] &= 0xFFF0FFFF; // clear PA4 bits,
     GPIOA->AFR[0] |= (1 << 18);
 
-    // Set up a PA5, PA6 as GPIO output pins for motor direction control
-    GPIOA->MODER &= 0xFFFFC3FF; // clear PA5, PA6 bits,
-    GPIOA->MODER |= (1 << 10) | (1 << 12);
-
-    //Initialize one direction pin to high, the other low
-    GPIOA->ODR |= (1 << 5);
-    GPIOA->ODR &= ~(1 << 6);
-
     // Set up PWM timer
     RCC->APB1ENR |= RCC_APB1ENR_TIM14EN;
     TIM14->CR1 = 0;                         // Clear control registers
@@ -222,15 +321,73 @@ void lab_pwm_init(void) {
     TIM14->CCER = 0;
 
     // Set output-compare CH1 to PWM1 mode and enable CCR1 preload buffer
-    TIM14->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE);
+    TIM14->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); // | TIM_CCMR1_OC1PE);
     TIM14->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
     TIM14->PSC = 1;                         // Run timer on 24Mhz
-    TIM14->ARR = 1200;                      // PWM at 20kHz
-    TIM14->CCR1 = 400;                        // Start PWM at 0% duty cycle
+    TIM14->ARR = 2400;                      // PWM at 20kHz
+    TIM14->CCR1 = 2000;                        // Start PWM at 0% duty cycle
 
     TIM14->CR1 |= TIM_CR1_CEN;              // Enable timer
 
     TIM14->EGR |= 1;
+}
+
+void lab_pwm_16(void) {
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+
+    // Set up pin PA6 for H-bridge PWM output (TIMER 14 CH1)
+    GPIOA->MODER |= (1 << 13);
+    GPIOA->MODER &= ~(1 << 12);
+
+    // Set PA6 to AF5,
+    GPIOA->AFR[0] &= 0xF0FFFFFF; // clear PA4 bits,
+    GPIOA->AFR[0] |= 0x05000000;
+
+    // Set up PWM timer
+    RCC->APB2ENR |= RCC_APB2ENR_TIM16EN;
+    TIM16->CR1 = 0;                         // Clear control registers
+    TIM16->CCMR1 = 0;                       // (prevents having to manually clear bits)
+    TIM16->CCER = 0;
+
+    // Set output-compare CH1 to PWM1 mode and enable CCR1 preload buffer
+    TIM16->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); // | TIM_CCMR1_OC1PE);
+    TIM16->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
+    TIM16->PSC = 1;                         // Run timer on 24Mhz
+    TIM16->ARR = 2400;                      // PWM at 20kHz
+    TIM16->CCR1 = 2000;                        // Start PWM at 0% duty cycle
+
+    TIM16->CR1 |= TIM_CR1_CEN;              // Enable timer
+
+    TIM16->EGR |= 1;
+}
+
+void lab_pwm_17(void) {
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+
+    // Set up pin PA7 for H-bridge PWM output (TIMER 14 CH1)
+    GPIOA->MODER |= (1 << 15);
+    GPIOA->MODER &= ~(1 << 14);
+
+    // Set PA7 to AF5,
+    GPIOA->AFR[0] &= 0x0FFFFFFF; // clear PA4 bits,
+    GPIOA->AFR[0] |= 0x50000000;
+
+    // Set up PWM timer
+    RCC->APB2ENR |= RCC_APB2ENR_TIM17EN;
+    TIM17->CR1 = 0;                         // Clear control registers
+    TIM17->CCMR1 = 0;                       // (prevents having to manually clear bits)
+    TIM17->CCER = 0;
+
+    // Set output-compare CH1 to PWM1 mode and enable CCR1 preload buffer
+    TIM17->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); // | TIM_CCMR1_OC1PE);
+    TIM17->CCER |= TIM_CCER_CC1E;           // Enable capture-compare channel 1
+    TIM17->PSC = 1;                         // Run timer on 24Mhz
+    TIM17->ARR = 2400;                      // PWM at 20kHz
+    TIM17->CCR1 = 2000;                        // Start PWM at 0% duty cycle
+
+    TIM17->CR1 |= TIM_CR1_CEN;              // Enable timer
+
+    TIM17->EGR |= 1;
 }
 
 /* Internal Helper Function
@@ -443,7 +600,7 @@ void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
         uint8_t pinIdxA = this->dir_pin_A;
         uint8_t pinIdxB = this->dir_pin_B;
 
-        // todo: test that forwards/back matches the pins we've selected here, may need to flip
+        // todo: test.c that forwards/back matches the pins we've selected here, may need to flip
         if (dir > 0) {
             // Pin A to high, pin B to low
             this->dirGpio->ODR |= (1 << pinIdxA);

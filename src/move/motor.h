@@ -39,6 +39,9 @@ struct Motor {
 struct Motor motors[4];
 
 void lab_pwm_init(void);
+void lab_pwm_16(void);
+void lab_pwm_17(void);
+
 
 uint64_t encoderCounts[] = { 0, 0, 0, 0 };
 
@@ -69,6 +72,10 @@ struct MotorPinout {
     uint16_t exti_codes[4];         // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
 };
 
+void initPWMsT1(struct MotorPinout*);
+void initPWMsT2(struct MotorPinout*);
+void initPWMsT15(struct MotorPinout*);
+
 // Debugging
 struct LEDs *leds;
 struct UART_INT *uart_ptr;
@@ -78,6 +85,9 @@ void initMotion(struct LEDs*, struct UART_INT*);
 
 // Initializes all four motor structs
 void initMotors(struct MotorPinout*);
+
+// Initializes direction pins for all four motors
+void initDirection(struct MotorPinout*);
 
 // Sets up all PWM pins and direction signals to drive the H-Bridges
 void initPWMs(struct MotorPinout*);
