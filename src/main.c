@@ -30,7 +30,7 @@ int main(void)
   leds.set(&leds);
 
   moveForward();
-  DELAY(5000);
+  DELAY(500);
   stop();
 
 //   while(1) {
