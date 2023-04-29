@@ -158,6 +158,7 @@ void initEncoders(struct MotorPinout *mp) {
     // Enable EXTI in NVIC
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 
+    // GPIOB2-3
     // Clear to input mode
     mp->encGpio->MODER &= ~(1 << 5);
     mp->encGpio->MODER &= ~(1 << 4);
@@ -177,7 +178,6 @@ void initEncoders(struct MotorPinout *mp) {
     mp->encGpio->PUPDR &= ~(1 << 5);
     mp->encGpio->PUPDR &= ~(1 << 4);
     mp->encGpio->PUPDR |= (1 << 4);
-
 
     // Turn on interrupts
     EXTI->IMR &= ~(1 << 2);
@@ -199,9 +199,15 @@ void initEncoders(struct MotorPinout *mp) {
 
     // Enable SYSCFG peripheral (this is on APB2 bus)
     RCC->APB2RSTR |= RCC_APB2RSTR_SYSCFGRST;
+    do {
+        uint_32_t tmp;
+        RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
+        tmp = RCC->APB2ENR & RCC_APB2ENR_SYSCFGEN;
+    } while (0U)
+    // todo: is this correct or do we need to do more to enable here?
 
-    // Configure multiplexer to route PA8-9 to EXTI2
-    SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PA | SYSCFG_EXTICR1_EXTI3_PA;
+    // Configure multiplexer to route PA2-3 to EXTI1
+    SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PB | SYSCFG_EXTICR1_EXTI3_PB;
 
     // Enable interrupts
     NVIC_EnableIRQ(EXTI2_3_IRQn);
@@ -209,17 +215,17 @@ void initEncoders(struct MotorPinout *mp) {
 
     // Configure a second timer (TIM6) to fire an ISR on update event
     // Used to periodically check and update speed variable
-    //RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
+    RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
 
     // Select PSC and ARR values that give an appropriate interrupt rate
-//    TIM6->PSC = 11;
-//    TIM6->ARR = 30000;
-//
-//    TIM6->DIER |= TIM_DIER_UIE;             // Enable update event interrupt
-//    TIM6->CR1 |= TIM_CR1_CEN;               // Enable Timer
-//
-//    NVIC_EnableIRQ(TIM6_DAC_IRQn);          // Enable interrupt in NVIC
-//    NVIC_SetPriority(TIM6_DAC_IRQn, 2);
+    TIM6->PSC = 11;
+    TIM6->ARR = 30000;
+
+    TIM6->DIER |= TIM_DIER_UIE;             // Enable update event interrupt
+    TIM6->CR1 |= TIM_CR1_CEN;               // Enable Timer
+
+    NVIC_EnableIRQ(TIM6_DAC_IRQn);          // Enable interrupt in NVIC
+    NVIC_SetPriority(TIM6_DAC_IRQn, 2);
 }
 
 // Encoder interrupt to calculate motor speed, also manages PI controller
@@ -228,8 +234,8 @@ void TIM6_DAC_IRQHandler(void) {
      * Note the motor speed is signed! Motor can be run in reverse.
      * Speed is measured by how far the counter moved from center point
      */
-    leds->green = 1;
-    leds->set(&leds);
+//    leds->green = 1;
+//    leds->set(&leds);
 
     uint64_t tickSum = 0;
     for (int i = 0; i < NUM_MOTORS; i++) {
@@ -244,8 +250,8 @@ void TIM6_DAC_IRQHandler(void) {
         motor->correctError(motor, avgTicks);
     }
     TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
-    leds->green = 0;
-    leds->set(&leds);
+//    leds->green = 0;
+//    leds->set(&leds);
 }
 
 /* The handler fired for each tick interrupt.
@@ -259,7 +265,7 @@ void EXTI2_3_IRQHandler(void) {
     int COUNT_IDX_OFFSET = 7;
 
     // Check which bit is pending (represents which encoder fired tick interrupt)
-    for (int i = 0; i < NUM_MOTORS; i++) {
+    for (int i = 0; i < NUM_MOTORS; i++) s{
         int pinIdx = ENC_PINS[i];
 
         uint16_t pinIsPending = EXTI->PR & (1 << pinIdx);
