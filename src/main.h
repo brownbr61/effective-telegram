@@ -1,5 +1,6 @@
 #ifndef MAIN_H
 #define MAIN_H
+void DELAY(int t);
 
 #include <stdint.h>
 #include <stdbool.h>

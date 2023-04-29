@@ -156,67 +156,70 @@ void fillDirPins(int *allPins, struct MotorPinout *mp) {
  * Sets up timer for speed calculation and PI updates. */
 void initEncoders(struct MotorPinout *mp) {
     // Enable EXTI in NVIC
-    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
 
-    // Enable interrupts
-    NVIC_EnableIRQ(mp->extLine);
-    NVIC_EnableIRQ(mp->extLine);
-    // todo: is this sufficient for enabling EXTI interrupts or do I need to mask interrupts specifically on the EXTI->IMR register?
+    // Clear to input mode
+    mp->encGpio->MODER &= ~(1 << 5);
+    mp->encGpio->MODER &= ~(1 << 4);
+    mp->encGpio->MODER &= ~(1 << 7);
+    mp->encGpio->MODER &= ~(1 << 6);
 
-    // Set interrupt priority
-    NVIC_SetPriority(mp->extLine, 3);
-    NVIC_SetPriority(mp->extLine, 3);
+    // Clear to low speed
+    mp->encGpio->OSPEEDR &= ~(1 << 5);
+    mp->encGpio->OSPEEDR &= ~(1 << 4);
+    mp->encGpio->OSPEEDR &= ~(1 << 7);
+    mp->encGpio->OSPEEDR &= ~(1 << 6);
 
-    for (int i = 0; i < NUM_MOTORS; i++) {
-        int pinIdx = mp->enc_pins[i] * 2;               // Two bits per pin here
+    // Set up pull-up resistor
+    mp->encGpio->PUPDR &= ~(1 << 5);
+    mp->encGpio->PUPDR &= ~(1 << 4);
+    mp->encGpio->PUPDR |= (1 << 4);
+    mp->encGpio->PUPDR &= ~(1 << 5);
+    mp->encGpio->PUPDR &= ~(1 << 4);
+    mp->encGpio->PUPDR |= (1 << 4);
 
-        // Set GPIO pins to input mode
-        mp->encGpio->MODER &= ~(11 << pinIdx); 		// Clear to input mode
 
-        // Set input speed to low (todo: read more about this, does it need to change?)
-        mp->encGpio->OSPEEDR &= ~(11 << pinIdx);    // Clear to low speed mode
+    // Turn on interrupts
+    EXTI->IMR &= ~(1 << 2);
+    EXTI->IMR |= (1 << 2);
+    EXTI->IMR &= ~(1 << 3);
+    EXTI->IMR |= (1 << 3);
 
-        // Enable pull-up resistor
-        mp->encGpio->PUPDR &= ~(11 << pinIdx);      // Clear
-        mp->encGpio->PUPDR |= (1 << pinIdx);       // Set to pull-up
-    }
+    // Turn on rising trigger
+    EXTI->RTSR &= ~(1 << 2);
+    EXTI->RTSR |= (1 << 2);
+    EXTI->RTSR &= ~(1 << 3);
+    EXTI->RTSR |= (1 << 3);
 
-    for (int i = 0; i < NUM_MOTORS; i++) {
-        int pinIdx = mp->enc_pins[i];
-
-        EXTI->IMR &= ~(1 << pinIdx);         // Clear
-        EXTI->IMR |= (1 << pinIdx);          // Turn on interrupts
-
-        EXTI->RTSR &= ~(1 << pinIdx);       // Clear
-        EXTI->RTSR |= (1 << pinIdx);        // Turn on rising trigger
-
-        EXTI->FTSR &= ~(1 << pinIdx);       // Clear
-        EXTI->FTSR |= (1 << pinIdx);        // Turn on falling trigger
-    }
+    // Turn on falling trigger
+    EXTI->FTSR &= ~(1 << 2);
+    EXTI->FTSR |= (1 << 2);
+    EXTI->FTSR &= ~(1 << 3);
+    EXTI->FTSR |= (1 << 3);
 
     // Enable SYSCFG peripheral (this is on APB2 bus)
     RCC->APB2RSTR |= RCC_APB2RSTR_SYSCFGRST;
 
-    // Configure the multiplexer to route PA8-11 to EXTI2
-    int bucketIdx = mp->sysCfgExtiBucket;
-    for (int i = 0; i < NUM_MOTORS; i++) {
-        uint16_t extiCode = mp->exti_codes[i];
-        SYSCFG->EXTICR[bucketIdx] |= extiCode;
-    }
+    // Configure multiplexer to route PA8-9 to EXTI2
+    SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI2_PA | SYSCFG_EXTICR1_EXTI3_PA;
+
+    // Enable interrupts
+    NVIC_EnableIRQ(EXTI2_3_IRQn);
+    NVIC_SetPriority(EXTI2_3_IRQn, 1);
 
     // Configure a second timer (TIM6) to fire an ISR on update event
     // Used to periodically check and update speed variable
-    RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
+    //RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
 
     // Select PSC and ARR values that give an appropriate interrupt rate
-    TIM6->PSC = 11;
-    TIM6->ARR = 30000;
-
-    TIM6->DIER |= TIM_DIER_UIE;             // Enable update event interrupt
-    TIM6->CR1 |= TIM_CR1_CEN;               // Enable Timer
-
-    NVIC_EnableIRQ(TIM6_DAC_IRQn);          // Enable interrupt in NVIC
-    NVIC_SetPriority(TIM6_DAC_IRQn, 2);
+//    TIM6->PSC = 11;
+//    TIM6->ARR = 30000;
+//
+//    TIM6->DIER |= TIM_DIER_UIE;             // Enable update event interrupt
+//    TIM6->CR1 |= TIM_CR1_CEN;               // Enable Timer
+//
+//    NVIC_EnableIRQ(TIM6_DAC_IRQn);          // Enable interrupt in NVIC
+//    NVIC_SetPriority(TIM6_DAC_IRQn, 2);
 }
 
 // Encoder interrupt to calculate motor speed, also manages PI controller
@@ -225,6 +228,9 @@ void TIM6_DAC_IRQHandler(void) {
      * Note the motor speed is signed! Motor can be run in reverse.
      * Speed is measured by how far the counter moved from center point
      */
+    leds->green = 1;
+    leds->set(&leds);
+
     uint64_t tickSum = 0;
     for (int i = 0; i < NUM_MOTORS; i++) {
         struct Motor *motor = &motors[i];
@@ -238,16 +244,18 @@ void TIM6_DAC_IRQHandler(void) {
         motor->correctError(motor, avgTicks);
     }
     TIM6->SR &= ~TIM_SR_UIF;        // Acknowledge the interrupt
+    leds->green = 0;
+    leds->set(&leds);
 }
 
 /* The handler fired for each tick interrupt.
  * Increments the appropriate count variable according to which encoder fired the event. */
-void EXTI4_15_IRQHandler(void) {
-    leds->red = 1;
+void EXTI2_3_IRQHandler(void) {
+    leds->green = 1;
     leds->set(leds);
 
     // NOTE: there is no way to make this pin agnostic, have to manually update consts below if pins are changed
-    int ENC_PINS[] = {8, 9};
+    int ENC_PINS[] = {2, 3};
     int COUNT_IDX_OFFSET = 7;
 
     // Check which bit is pending (represents which encoder fired tick interrupt)
@@ -265,9 +273,8 @@ void EXTI4_15_IRQHandler(void) {
         }
     }
 
-    DELAY(1000);
-    leds->red = 0;
-    leds->set(leds);
+//    leds->green = 0;
+//    leds->set(leds);
 }
 
 // Calculates error for single motor and resets PWM signal
@@ -323,18 +330,14 @@ void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
         }
 
 //        // DEBUGGING
-//        DELAY(1000);
 //        leds->orange = 0;
 //        leds->set(leds);
     }
 }
 
 /* Sets the target RPM and direction for this motor */
+// todo: we are getting through this
 void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
-    // DEBUG
-    leds->blue = 1;
-    leds->set(leds);
-
     if (targetRpm > 0) {
         this->target_ticks = targetRpm;
         uint8_t pinIdxA = this->dir_pin_A;
@@ -350,15 +353,7 @@ void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
         } else {
             uart_ptr->transmit(255);
         }
-    } else {
-        leds->red = 1;
-        leds->set(leds);
     }
-
-    // DEBUG
-    DELAY(1000);
-    leds->blue = 0;
-    leds->set(leds);
 }
 
 /* Stops the motor by setting the target RPM to zero. Does not affect direction. */

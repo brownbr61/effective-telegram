@@ -59,8 +59,11 @@ int main(void)
   DELAY(5000);
 
   moveForward();
-  DELAY(5000);
   stop();
+
+//  leds.blue = 1;
+//  leds.set(&leds);
+
 
 //   while(1) {
 //     uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
