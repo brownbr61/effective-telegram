@@ -25,13 +25,12 @@ int main(void)
   initSensorData(&ledSensor);
 
   initMotion(&leds, &uart);
-
-  leds.green = 1;
-  leds.set(&leds);
-
   moveForward();
-  DELAY(5000);
   stop();
+
+//  leds.blue = 1;
+//  leds.set(&leds);
+
 
 //   while(1) {
 //     uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
