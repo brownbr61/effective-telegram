@@ -9,34 +9,35 @@
  */
 
 struct UART_INT uart;
-int main(void)
-{ 
-  HSI48_EN();
-  // Enable system clock to be 1ms per tick
-  SysTick_Config(1000);
+int main(void) {
+    HSI48_EN();
+    // Enable system clock to be 1ms per tick
+    SysTick_Config(1000);
 
-  struct LEDs leds;
-  struct SensorData ledSensor;
+    struct LEDs leds;
+    struct SensorData ledSensor;
 
-  initLEDs(&leds);
+    initLEDs(&leds);
 
-  initUart(&uart);
+    initUart(&uart);
 
-  initSensorData(&ledSensor);
+    initSensorData(&ledSensor);
 
-  initMotion(&leds, &uart);
-  moveForward();
-  stop();
+    initMotion(&leds, &uart);
+    moveForward();
+    stop();
 
-//  leds.blue = 1;
-//  leds.set(&leds);
-
-
-//   while(1) {
-//     uart.transmit(ledSensor.sensor.read(&ledSensor.sensor));
-//     leds.blue = ledSensor.diverges(&ledSensor);
-//     leds.set(&leds);
-//   }
+    // Check to see it Pending Reg is actually being set for tick interrupts
+    while(1) {
+        if (EXTI->PR & 0x00000008) {
+            leds.orange = 1;
+            leds.set(&leds);
+        }
+        if (EXTI->PR & 0x00000004) {
+            leds.red = 1;
+            leds.set(&leds);
+        }
+    }
 }
 
 // Convenience methods
