@@ -17,9 +17,7 @@ void initMotion(struct LEDs *leds_in) {
 //    lab_pwm_init();
 //    initPWMsT1(&mp);
 
-    initEncoders(&mp);
-    transmit2bytes(4);
-    leds = leds_in;
+    //initEncoders(&mp);
 }
 
 /* Initializes all motors in the forward direction in a stopped state */
@@ -116,7 +114,7 @@ void assignPins(struct MotorPinout *mp) {
 void initPWMsT2(struct MotorPinout *mp) {
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
 
-    // Set up pin PA4 for H-bridge PWM output (TIMER 2 CH1+2)
+    // Set up pin PA0-3 for H-bridge PWM output (TIMER 2 CH1-4)
     mp->pwmGpio->MODER |= (1 << 1);
     mp->pwmGpio->MODER &= ~(1 << 0);
     mp->pwmGpio->MODER |= (1 << 3);
@@ -126,7 +124,7 @@ void initPWMsT2(struct MotorPinout *mp) {
     mp->pwmGpio->MODER |= (1 << 7);
     mp->pwmGpio->MODER &= ~(1 << 6);
 
-    // Set PA0-1 to AF1
+    // Set PA0-3 to AF1
     mp->pwmGpio->AFR[0] &= 0xFFFF0000; // clear PA4 bits,
     mp->pwmGpio->AFR[0] |= (1 << 1);
     mp->pwmGpio->AFR[0] |= (1 << 5);
@@ -150,7 +148,6 @@ void initPWMsT2(struct MotorPinout *mp) {
         if (i%2 == 0) {
             mp->dirGpio->ODR |= (1 << pinIdx);
         } else {
-            leds->set(leds);
             mp->dirGpio->ODR &= ~(1 << pinIdx);
         }
     }
@@ -179,6 +176,8 @@ void initPWMsT2(struct MotorPinout *mp) {
     mp->pwmTimer->CR1 |= TIM_CR1_CEN;              // Enable timer
 
     // DEBUGGING
+    mp->pwmTimer->EGR = 0;
+    mp->pwmTimer->EGR |= (1 << 4) | (1 << 3) | (1 << 2) | (1 << 1);
     mp->pwmTimer->EGR |= 1; // todo: forces register update
 }
 
@@ -536,7 +535,7 @@ void PI_update(struct Motor *this) {
     this->error_integral = (this->error_integral > 3200) ? 3200 : this->error_integral;
     this->error_integral = (this->error_integral > 0) ? 0 : this->error_integral;
 
-    // Calculate Distance error & add to output
+    // todo: Calculate Distance error & add to output
     //int16_t derror = meand - distance
 
     // Calculate proportional error & add to output
@@ -554,7 +553,7 @@ void PI_update(struct Motor *this) {
 
 // Set the duty cycle of the PWM, accepts (0-100)
 void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
-    uint32_t TEST_VAL = 840;
+    uint32_t TEST_VAL = 2000;
     if(duty <= 100) {
         leds->orange = 1;
         leds->set(leds);
@@ -600,7 +599,7 @@ void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
         uint8_t pinIdxA = this->dir_pin_A;
         uint8_t pinIdxB = this->dir_pin_B;
 
-        // todo: test.c that forwards/back matches the pins we've selected here, may need to flip
+        // todo: test that forwards/back matches the pins we've selected here, may need to flip
         if (dir > 0) {
             // Pin A to high, pin B to low
             this->dirGpio->ODR |= (1 << pinIdxA);
@@ -614,7 +613,7 @@ void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
     }
 
     // DEBUG
-    DELAY(1000);
+    DELAY(100);
     leds->blue = 0;
     leds->set(leds);
 

@@ -59,7 +59,7 @@ int main(void)
   DELAY(5000);
 
   moveForward();
-  DELAY(5000);
+  DELAY(500);
   stop();
 
 //   while(1) {
