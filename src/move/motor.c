@@ -6,13 +6,14 @@ void fillDirPins(int *allPins, struct MotorPinout *mp);
 void initMotion(struct LEDs *leds_in) {
     transmit2bytes(0);
     leds = leds_in;
-    uart_ptr = uart_in;
 
     struct MotorPinout mp;
     assignPins(&mp);
     transmit2bytes(1);
     initMotors(&mp);
+    transmit2bytes(2);
     initPWM(&mp);
+    transmit2bytes(3);
     initEncoders(&mp);
 }
 
@@ -199,11 +200,11 @@ void initEncoders(struct MotorPinout *mp) {
 
     // Enable SYSCFG peripheral (this is on APB2 bus)
     RCC->APB2RSTR |= RCC_APB2RSTR_SYSCFGRST;
-    do {
-        uint_32_t tmp;
+    uint32_t tmp = 0;
+    while(tmp != 0) {
         RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
         tmp = RCC->APB2ENR & RCC_APB2ENR_SYSCFGEN;
-    } while (0U)
+    } 
     // todo: is this correct or do we need to do more to enable here?
 
     // Configure multiplexer to route PA2-3 to EXTI1
@@ -265,7 +266,7 @@ void EXTI2_3_IRQHandler(void) {
     int COUNT_IDX_OFFSET = 7;
 
     // Check which bit is pending (represents which encoder fired tick interrupt)
-    for (int i = 0; i < NUM_MOTORS; i++) s{
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = ENC_PINS[i];
 
         uint16_t pinIsPending = EXTI->PR & (1 << pinIdx);
@@ -320,7 +321,7 @@ void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
 //        leds->orange = 1;
 //        leds->set(leds);
 
-        uint32_t autoReload = this->pwmTimer->ARR;
+        // uint32_t autoReload = this->pwmTimer->ARR;
         uint8_t motorIdx = this->id;
         switch (motorIdx) {
             case 1:

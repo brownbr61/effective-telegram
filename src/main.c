@@ -29,13 +29,12 @@ int main(void) {
 
     initSensorData(&ledSensor);
 
-  initMotion(&leds, &uart);
+  initMotion(&leds);
 
   leds.green = 1;
   leds.set(&leds);
   for (volatile int i = 0; i < 2400000; i++) {}
 
-  initMotion(&leds);
   uart.transmit(0);
   uart.transmit(1);
 

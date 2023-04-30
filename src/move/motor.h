@@ -63,7 +63,7 @@ struct LEDs *leds;
 struct UART_INT *uart_ptr;
 
 // Initializes entire class and structure necessary for motion
-void initMotion(struct LEDs*, struct UART_INT*);
+void initMotion(struct LEDs*);
 
 // Initializes all four motor structs
 void initMotors(struct MotorPinout*);
