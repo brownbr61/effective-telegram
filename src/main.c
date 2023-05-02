@@ -34,19 +34,15 @@ int main(void) {
         moveForward();
     } else {
         moveForward();
-        monitorObstacles();
+        hokeyPokey();
     }
 
 }
 
-void monitorObstacles() {
+void hokeyPokey() {
     struct Sensor *left_sensor = &(sensors[0]);
     struct Sensor *center_sensor = &(sensors[1]);
     struct Sensor *right_sensor = &(sensors[2]);
-
-    int lastTurn = NO_TURN;
-    // todo: add lastTurn into logic and adjust below
-    // todo: get rid of left hand wall function
 
     // Poll values in sensors
     while(1) {
@@ -63,29 +59,52 @@ void monitorObstacles() {
         int centerDetect = center_dist = THRESHOLD_DIST > 0;
         int rightDetect = right_dist - THRESHOLD_DIST > 0;
 
-        // Dead end
+        // In ms
+        int shortTime = 500;
+        int longTime = 1000;
+
         if (leftDetect && centerDetect && rightDetect) {
-            // Turn right 90d
-            // Go forward
-            // Left corner
+            turnRight();
+            moveForward();
+            HAL_Delay(shortTime);
+            stop();
+            turnLeft();
         } else if (leftDetect && centerDetect) {
-            // Turn right 90d
-            // Go forward
-            // When we don't detect left anymore, turn left
-            // Right corner
+            turnRight();
+            moveForward();
+            HAL_Delay(longTime);
+            stop();
+            turnLeft();
         } else if (rightDetect && centerDetect) {
-            // Turn left 90d
-            // Go forward
-            // When we don't detect right anymore, turn right
+            turnLeft();
+            moveForward();
+            HAL_Delay(longTime);
+            stop();
+            turnRight();
         } else if (leftDetect && rightDetect) {
-            // either going through tunnel or entering dead end
+            turnRight();
+            moveForward();
+            HAL_Delay(longTime);
+            stop();
+            turnLeft();
         } else if (leftDetect) {
-            // keep going straight
+            turnRight();
+            moveForward();
+            HAL_Delay(shortTime);
+            stop();
+            turnLeft();
         } else if (centerDetect) {
-            // Turn right 90d
-
+            turnRight();
+            moveForward();
+            HAL_Delay(shortTime);
+            stop();
+            turnLeft();
         } else if (rightDetect) {
-
+            turnLeft();
+            moveForward();
+            HAL_Delay(shortTime);
+            stop();
+            turnRight();
         } else {
             moveForward();
         }

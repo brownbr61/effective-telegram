@@ -54,5 +54,6 @@ void turnRight(void);
 void moveBackward(void);
 void turnLeft(void);
 void initSensors(void);
+void hokeyPokey(void);
 
 #endif
