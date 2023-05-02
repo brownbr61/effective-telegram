@@ -28,35 +28,14 @@ struct Motor {
 };
 
 // Order: left, right
-struct Motor motors[2];
-uint64_t encoderCounts[] = { 0, 0};
+struct Motor motors[NUM_MOTORS];
+uint64_t encoderCounts[] = {0, 0};
 
 /* A single object to assign/control our motor connections to the STM32 Discovery board.
  * Note: I was able to use the same GPIO ports for all direction and encoder ports
  * If we have to split these up to multiple ports (e.g. GPIOA, GPIOB) then will have to add properties to this struct */
-struct MotorPinout {
-    // PWM controls
-    GPIO_TypeDef *pwmGpio;          // GPIO Port used for PWM inputs
-    uint8_t pwm_in_pins[2];         // Used for PWM input to the motors
-    uint8_t pwm_alt_fxn_codes[2];   // The alternate function codes corresponding to the chosen PWM input pins
-    TIM_TypeDef *pwmTimer;          // Timer used for PWM input pins (must coordinate with pwm_in array)
 
-    // Direction controls
-    GPIO_TypeDef *dirGpio;          // GPIO Port used for motor direction pins
-    uint8_t mtr_A_dir_pins[2];      // Motor A direction control pins
-    uint8_t mtr_B_dir_pins[2];      // Motor B direction control pins
-
-    // Encoder controls
-    GPIO_TypeDef *encGpio;          // GPIO Port used for motor encoder pins
-    uint8_t enc_pins[2];            // Used for encoder A outputs from H-Bridge
-    uint8_t enc_alt_fxn_codes[2];   // The alternate function codes corresponding to the chosen encoder pins
-    TIM_TypeDef *encTimer;          // Timer associated with encoder pins; used to calculate speed (must coordinate with enc array)
-    uint8_t extLine;               // EXTI peripheral line tied to count interrupts
-    uint8_t sysCfgExtiBucket;       // The index which the chosen encoder pins correspond to in the SYSCFG_EXTICR buckets (values 0-3) [i.e. 0: 0-3, 1: 4-7, etc]
-    uint16_t exti_codes[2];         // The configuration values for setting the SYS_CFG->EXTICR register; corresponds to encoder pins
-};
-
-void initPWM(struct MotorPinout*);
+void initPWM();
 
 // Debugging
 struct LEDs *leds;
@@ -66,19 +45,16 @@ struct UART_INT *uart_ptr;
 void initMotion(struct LEDs*, struct UART_INT*);
 
 // Initializes all four motor structs
-void initMotors(struct MotorPinout*);
+void initMotors();
 
 // Initializes direction pins for all four motors
-void initDirection(struct MotorPinout*);
+void initDirection();
 
 // Sets up all PWM pins and direction signals to drive the H-Bridges
-void initPWMs(struct MotorPinout*);
+void initPWMs();
 
 // Sets up GPIO inputs for encoder signals + sets up timer for speed check interrupts
-void initEncoders(struct MotorPinout*);
-
-// Assigns the pins related to motion
-void assignPins(struct MotorPinout*);
+void initEncoders();
 
 // PI control code is called within a timer interrupt
 void PI_update(struct Motor*, uint64_t);

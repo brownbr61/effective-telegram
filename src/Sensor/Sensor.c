@@ -4,6 +4,7 @@ void initSensor(struct Sensor* this, uint32_t pinNum) {
   this->pin = pinNum;
   this->read = &readSensor;
 
+  // todo: this needs to be read off of pin idx
   GPIOC->MODER &= ~(0xFF);
   GPIOC->MODER |=  (0xFF);
   GPIOC->PUPDR |= ~(0xFF);
@@ -48,4 +49,4 @@ uint16_t readSensor(struct Sensor* this) {
   uint16_t data = ADC1->DR;
   ADC1->CHSELR &= ~(1 << this->pin);
   return data;
-} 
+}

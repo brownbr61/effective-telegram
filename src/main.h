@@ -50,8 +50,9 @@ void ERROR(char *err) {
 void stop(void);
 void move(uint8_t direction);
 void moveForward(void);
-void moveRight(void);
+void turnRight(void);
 void moveBackward(void);
-void moveLeft(void);
+void turnLeft(void);
+void initSensors(void);
 
 #endif

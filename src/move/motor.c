@@ -1,21 +1,22 @@
 #include "motor.h"
 #include "../main.h"
 
-void fillDirPins(int *allPins, struct MotorPinout *mp);
 // Sets up the entire motor drive system
 void initMotion(struct LEDs *leds_in, struct UART_INT *uart_in) {
     leds = leds_in;
     uart_ptr = uart_in;
 
-    struct MotorPinout mp;
-    assignPins(&mp);
-    initMotors(&mp);
-    initPWM(&mp);
-    initEncoders(&mp);
+    initMotors();
+    initPWM();
+    initEncoders();
 }
 
 /* Initializes all motors in the forward direction in a stopped state */
-void initMotors(struct MotorPinout *mp) {
+void initMotors() {
+    int pwm_in_pins[] = {0, 1};
+    int mtr_A_dir_pins[] = {4, 5};
+    int mtr_B_dir_pins[] = {6, 7};
+
     for (int i = 0; i < NUM_MOTORS; i++) {
         struct Motor *motor = &(motors[i]);
         motor->id = i + 1; // Range is 1-2
@@ -30,78 +31,45 @@ void initMotors(struct MotorPinout *mp) {
         motor->spin = &spinMotor;
         motor->stop = &stopMotor;
 
-        motor->pwmGpio = mp->pwmGpio;
-        motor->pwm_in_pin = mp->pwm_in_pins[i];
-        motor->pwm_alt_fxn_code = mp->pwm_alt_fxn_codes[i];
+        motor->pwmGpio = GPIOA;
+        motor->pwm_in_pin = pwm_in_pins[i];
 
-        motor->dirGpio = mp->dirGpio;
+        motor->dirGpio = GPIOB;
         switch (i) {
             case 0:
-                motor->dir_pin_A = mp->mtr_A_dir_pins[0];
-                motor->dir_pin_B = mp->mtr_A_dir_pins[1];
+                motor->dir_pin_A = mtr_A_dir_pins[0];
+                motor->dir_pin_B = mtr_A_dir_pins[1];
                 break;
             case 1:
-                motor->dir_pin_A = mp->mtr_B_dir_pins[0];
-                motor->dir_pin_B = mp->mtr_B_dir_pins[1];
+                motor->dir_pin_A = mtr_B_dir_pins[0];
+                motor->dir_pin_B = mtr_B_dir_pins[1];
                 break;
         }
     }
 }
 
-/* Pin assignment for the PWM input and motor direction outputs.
- * Note: using a single timer for all four PWM input pins to keep motors at synched RPMs */
-void assignPins(struct MotorPinout *mp) {
-    mp->pwm_in_pins[0] = 0;  // PA0
-    mp->pwm_in_pins[1] = 1;  // PA1
-
-    mp->pwm_alt_fxn_codes[0] = 0x2;  // AF2/0010
-    mp->pwm_alt_fxn_codes[1] = 0x2;  // AF2/0010
-
-    mp->mtr_A_dir_pins[0] = 4;   // PB4
-    mp->mtr_A_dir_pins[1] = 5;   // PB5
-    mp->mtr_B_dir_pins[0] = 6;   // PB6
-    mp->mtr_B_dir_pins[1] = 7;   // PB7
-
-    mp->enc_pins[0] = 8;   // PA8
-    mp->enc_pins[1] = 9;   // PA9
-
-    mp->enc_alt_fxn_codes[0] = 0x2;  // AF2/0010
-    mp->enc_alt_fxn_codes[1] = 0x2;  // AF2/0010
-
-    mp->pwmGpio = GPIOA;
-    mp->dirGpio = GPIOB;
-    mp->encGpio = GPIOA;
-    mp->pwmTimer = TIM2;
-    mp->encTimer = TIM1;
-    mp->extLine = EXTI4_15_IRQn;            // NOTE: IF THIS CHANGES, NEED TO MANUALLY UPDATE INTERRUPT HANDLER
-    mp->sysCfgExtiBucket = 2;
-    mp->exti_codes[0] = SYSCFG_EXTICR3_EXTI8_PA;
-    mp->exti_codes[1] = SYSCFG_EXTICR3_EXTI9_PA;
-}
-
 // Sets up the PWM and direction signals to drive the H-Bridge
-void initPWM(struct MotorPinout *mp) {
+void initPWM() {
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
 
     // Set up pin PA0-1 for H-bridge PWM output (TIMER 2 CH1-2)
-    mp->pwmGpio->MODER |= (1 << 1);
-    mp->pwmGpio->MODER &= ~(1 << 0);
-    mp->pwmGpio->MODER |= (1 << 3);
-    mp->pwmGpio->MODER &= ~(1 << 2);
+    GPIOA->MODER |= (1 << 1);
+    GPIOA->MODER &= ~(1 << 0);
+    GPIOA->MODER |= (1 << 3);
+    GPIOA->MODER &= ~(1 << 2);
 
     // Set PA0-1 to AF1
-    mp->pwmGpio->AFR[0] &= 0xFFFFFF00; // clear PA4 bits,
-    mp->pwmGpio->AFR[0] |= (1 << 1);
-    mp->pwmGpio->AFR[0] |= (1 << 5);
+    GPIOA->AFR[0] &= 0xFFFFFF00; // clear PA4 bits,
+    GPIOA->AFR[0] |= (1 << 1);
+    GPIOA->AFR[0] |= (1 << 5);
 
     // Set up GPIO output pins for motor direction control
-    int allDirPins[4];
-    fillDirPins(allDirPins, mp);
-    mp->dirGpio->MODER &= (0xFF << 4);    // Clear
+    int allDirPins[4] = {4, 5, 6, 7};
+    GPIOB->MODER &= (0xFF << 4);    // Clear
     for (int i = 0; i < (NUM_MOTORS * 2); i++) {
         int pinIdx = allDirPins[i] * 2;
-        mp->dirGpio->MODER &= ~(11 << pinIdx);  // Clear
-        mp->dirGpio->MODER |= (1 << pinIdx);    // Assign
+        GPIOB->MODER &= ~(11 << pinIdx);  // Clear
+        GPIOB->MODER |= (1 << pinIdx);    // Assign
     }
 
     // For each motor, initialize one direction pin to high, the other low
@@ -109,44 +77,33 @@ void initPWM(struct MotorPinout *mp) {
         int pinIdx = allDirPins[i];
         // Set pins in even indices high, odd indices low
         if (i%2 == 0) {
-            mp->dirGpio->ODR |= (1 << pinIdx);
+            GPIOB->ODR |= (1 << pinIdx);
         } else {
-            mp->dirGpio->ODR &= ~(1 << pinIdx);
+            GPIOB->ODR &= ~(1 << pinIdx);
         }
     }
 
     // Set up PWM timer
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-    mp->pwmTimer->CR1 = 0;                          // Clears; defaults to edge-aligned upcounting
-    mp->pwmTimer->CCMR1 = 0;                        // (prevents having to manually clear bits)
-    mp->pwmTimer->CCER = 0;
+    TIM2->CR1 = 0;                          // Clears; defaults to edge-aligned upcounting
+    TIM2->CCMR1 = 0;                        // (prevents having to manually clear bits)
+    TIM2->CCER = 0;
 
     // Set output-compare CH1-4 to PWM1 mode and enable CCR1 preload buffer
-    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE); // Enable channel 1
-    mp->pwmTimer->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1); //| TIM_CCMR1_OC2PE); // Enable channel 2
+    TIM2->CCMR1 |= (TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1); //| TIM_CCMR1_OC1PE); // Enable channel 1
+    TIM2->CCMR1 |= (TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1); //| TIM_CCMR1_OC2PE); // Enable channel 2
 
-    mp->pwmTimer->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E);        // Enable capture-compare channel 1-2
-    mp->pwmTimer->PSC = 1;                         // Run timer on 24Mhz
-    mp->pwmTimer->ARR = 2400;                      // PWM at 20kHz
+    TIM2->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC2E);        // Enable capture-compare channel 1-2
+    TIM2->PSC = 1;                         // Run timer on 24Mhz
+    TIM2->ARR = 2400;                      // PWM at 20kHz
 
-    mp->pwmTimer->CCR1 = 2000;                        // Start PWMs at 0% duty cycle
-    mp->pwmTimer->CCR2 = 2000;
+    TIM2->CCR1 = 2000;                        // Start PWMs at 0% duty cycle
+    TIM2->CCR2 = 2000;
 
-    mp->pwmTimer->CR1 |= TIM_CR1_CEN;              // Enable timer
+    TIM2->CR1 |= TIM_CR1_CEN;              // Enable timer
 
     // DEBUGGING
-    //mp->pwmTimer->EGR |= 1; // todo: forces register update
-}
-
-/* Internal Helper Function
- * Fills the provided array with the direction pins from the provided struct in the following order:
- * [MotorA_pin0, motorA_pin1, motorB_pin0, motorB_pin1, motorC_pin0, motorC_pin1, motorD_pin0, motorD_pin1]*/
-void fillDirPins(int *allPins, struct MotorPinout *mp) {
-    allPins[0] = mp->mtr_A_dir_pins[0];
-    allPins[1] = mp->mtr_A_dir_pins[1];
-
-    allPins[2] = mp->mtr_B_dir_pins[0];
-    allPins[3] = mp->mtr_B_dir_pins[1];
+    //TIM2->EGR |= 1; // todo: forces register update
 }
 
 /* Sets up four GPIO pins for inputs and enable interrupts on rising and falling edge of encoder wave.
@@ -157,24 +114,24 @@ void initEncoders(struct MotorPinout *mp) {
 
     // GPIOB2-3
     // Clear to input mode
-    mp->encGpio->MODER &= ~(1 << 5);
-    mp->encGpio->MODER &= ~(1 << 4);
-    mp->encGpio->MODER &= ~(1 << 7);
-    mp->encGpio->MODER &= ~(1 << 6);
+    GPIOB->MODER &= ~(1 << 5);
+    GPIOB->MODER &= ~(1 << 4);
+    GPIOB->MODER &= ~(1 << 7);
+    GPIOB->MODER &= ~(1 << 6);
 
     // Clear to low speed
-    mp->encGpio->OSPEEDR &= ~(1 << 5);
-    mp->encGpio->OSPEEDR &= ~(1 << 4);
-    mp->encGpio->OSPEEDR &= ~(1 << 7);
-    mp->encGpio->OSPEEDR &= ~(1 << 6);
+    GPIOB->OSPEEDR &= ~(1 << 5);
+    GPIOB->OSPEEDR &= ~(1 << 4);
+    GPIOB->OSPEEDR &= ~(1 << 7);
+    GPIOB->OSPEEDR &= ~(1 << 6);
 
     // Set up pull-up resistor
-    mp->encGpio->PUPDR &= ~(1 << 5);
-    mp->encGpio->PUPDR &= ~(1 << 4);
-    mp->encGpio->PUPDR |= (1 << 4);
-    mp->encGpio->PUPDR &= ~(1 << 5);
-    mp->encGpio->PUPDR &= ~(1 << 4);
-    mp->encGpio->PUPDR |= (1 << 4);
+    GPIOB->PUPDR &= ~(1 << 5);
+    GPIOB->PUPDR &= ~(1 << 4);
+    GPIOB->PUPDR |= (1 << 4);
+    GPIOB->PUPDR &= ~(1 << 5);
+    GPIOB->PUPDR &= ~(1 << 4);
+    GPIOB->PUPDR |= (1 << 4);
 
     // Turn on interrupts
     EXTI->IMR &= ~(1 << 2);
@@ -196,11 +153,12 @@ void initEncoders(struct MotorPinout *mp) {
 
     // Enable SYSCFG peripheral (this is on APB2 bus)
     RCC->APB2RSTR |= RCC_APB2RSTR_SYSCFGRST;
-    do {
-        uint_32_t tmp;
-        RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
-        tmp = RCC->APB2ENR & RCC_APB2ENR_SYSCFGEN;
-    } while (0U)
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
+//    do {
+//        uint_32_t tmp;
+//        RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
+//        tmp = RCC->APB2ENR & RCC_APB2ENR_SYSCFGEN;
+//    } while (0U)
     // todo: is this correct or do we need to do more to enable here?
 
     // Configure multiplexer to route PA2-3 to EXTI1
@@ -262,7 +220,7 @@ void EXTI2_3_IRQHandler(void) {
     int COUNT_IDX_OFFSET = 7;
 
     // Check which bit is pending (represents which encoder fired tick interrupt)
-    for (int i = 0; i < NUM_MOTORS; i++) s{
+    for (int i = 0; i < NUM_MOTORS; i++) {
         int pinIdx = ENC_PINS[i];
 
         uint16_t pinIsPending = EXTI->PR & (1 << pinIdx);
@@ -281,7 +239,7 @@ void EXTI2_3_IRQHandler(void) {
 }
 
 // Calculates error for single motor and resets PWM signal
-void PI_update(struct Motor *this, uint64_t avgDist) {
+void PI_update(struct Motor* this, uint64_t avgDist) {
 
     // Calculate error signal
     this->error = (this->target_ticks - this->num_ticks);
@@ -309,7 +267,7 @@ void PI_update(struct Motor *this, uint64_t avgDist) {
 }
 
 // Set the duty cycle of the PWM, accepts (0-100)
-void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
+void pwm_setDutyCycle(struct Motor* this, uint8_t duty) {
     uint32_t TEST_VAL = 1000;
     if(duty <= 100) {
 
@@ -340,7 +298,7 @@ void pwm_setDutyCycle(struct Motor *this, uint8_t duty) {
 
 /* Sets the target RPM and direction for this motor */
 // todo: we are getting through this
-void spinMotor(struct Motor *this, uint16_t targetRpm, int dir) {
+void spinMotor(struct Motor* this, uint16_t targetRpm, int dir) {
     if (targetRpm > 0) {
         this->target_ticks = targetRpm;
         uint8_t pinIdxA = this->dir_pin_A;
